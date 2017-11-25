@@ -17,4 +17,3 @@ with tf.Session() as sess:
     # sess.run(init_op)
 
     print(sess.run(y))
-

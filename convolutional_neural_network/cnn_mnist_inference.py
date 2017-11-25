@@ -54,7 +54,7 @@ def inference(input_tensor, train, regularizer):
     # 输出为[x-size=14, y-size=14, deep=32]的矩阵
     with tf.name_scope("layer2-pool1"):
         pool1 = tf.nn.max_pool(relu1, ksize=[1, 2, 2, 1], strides=[
-                               1, 2, 2, 1], padding="SAME")
+            1, 2, 2, 1], padding="SAME")
 
     # 第三层卷积2
     # 输入为[x-size=14, y-size=14, deep=32]的矩阵
@@ -73,7 +73,7 @@ def inference(input_tensor, train, regularizer):
             initializer=tf.constant_initializer(0.0)
         )
         conv2 = tf.nn.conv2d(pool1, conv2_weights, strides=[
-                             1, 1, 1, 1], padding='SAME')
+            1, 1, 1, 1], padding='SAME')
         relu2 = tf.nn.relu(tf.nn.bias_add(conv2, conv2_biases))
 
     # 第四层池化2

@@ -62,13 +62,13 @@ def train(mnist):
 
     # config saver
     saver = tf.train.Saver()
-    
+
     with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state(MODEL_SAVE_PATH)
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
         else:
-             tf.global_variables_initializer().run()
+            tf.global_variables_initializer().run()
 
         for i in range(TRAINING_STEPS):
             xs, ys = mnist.train.next_batch(BATCH_SIZE)
@@ -79,7 +79,7 @@ def train(mnist):
                                       cnn_mnist_inference.NUM_CHANNELS))
 
             _, loss_value, step = sess.run(
-                [train_op, loss, global_step], 
+                [train_op, loss, global_step],
                 feed_dict={x: reshaped_xs, y_: ys})
 
             if i % 100 == 0:

@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+
 def get_weight(shape, λ):
     """
     获取一层神经网络边上的权重

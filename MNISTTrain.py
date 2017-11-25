@@ -53,13 +53,13 @@ def train(mnist):
 
     x = tf.placeholder(tf.float32, [None, INPUT_NODE], name='x-input')
     y_ = tf.placeholder(tf.float32, [None, OUTPUT_NODE], name='y-input')
-    
+
     # 生成隐藏层的参数。
     # truncated normal - 截断正太分布（限制 x 的取值）
     weights1 = tf.Variable(tf.truncated_normal(
         [INPUT_NODE, LAYER1_NODE], stddev=0.1))
     biases1 = tf.Variable(tf.constant(0.1, shape=[LAYER1_NODE]))
-    
+
     # 生成输出层的参数。
     weights2 = tf.Variable(tf.truncated_normal(
         [LAYER1_NODE, OUTPUT_NODE], stddev=0.1))
@@ -138,9 +138,11 @@ def train(mnist):
 
         saver.save(sess, "./model/MNIST_model/model.ckpt")
 
+
 def main(argv=None):
     mnist = input_data.read_data_sets("./datasets/MNIST_data", one_hot=True)
     train(mnist)
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     main()

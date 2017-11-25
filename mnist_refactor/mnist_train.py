@@ -46,7 +46,7 @@ def train(mnist):
         global_step,
         mnist.train.num_examples / BATCH_SIZE, LEARNING_RATE_DECAY,
         staircase=True)
-    
+
     # construct train step
     train_step = tf.train.GradientDescentOptimizer(
         learning_rate).minimize(loss, global_step=global_step)
@@ -74,6 +74,7 @@ def main(argv=None):
     mnist = input_data.read_data_sets(
         "./datasets/MNIST_data", one_hot=True)
     train(mnist)
+
 
 if __name__ == '__main__':
     tf.app.run()
