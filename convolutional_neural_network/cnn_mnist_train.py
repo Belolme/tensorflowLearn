@@ -13,7 +13,7 @@ LEARNING_RATE_DECAY = 0.99
 REGULARIZATION_RATE = 0.0001
 TRAINING_STEPS = 30000
 MOVING_AVERAGE_DECAY = 0.99
-MODEL_SAVE_PATH = "MNIST_model/"
+MODEL_SAVE_PATH = "./datasets/MNIST_model/"
 MODEL_NAME = "cnn_mnist_model"
 
 
@@ -82,7 +82,7 @@ def train(mnist):
                 [train_op, loss, global_step],
                 feed_dict={x: reshaped_xs, y_: ys})
 
-            if i % 100 == 0:
+            if i % 1000 == 0:
                 print("After %d training step(s), loss on training batch is %g." % (
                     step, loss_value))
                 saver.save(sess, os.path.join(MODEL_SAVE_PATH, MODEL_NAME),
