@@ -58,9 +58,3 @@ labels = tf.cast(features['label'], tf.int32)
 pixels = tf.cast(features['pixels'], tf.int32)
 
 sess = tf.Session()
-
-# 多线程
-coord = tf.train.Coordinator()
-threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-
-
