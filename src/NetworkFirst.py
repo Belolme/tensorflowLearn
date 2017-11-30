@@ -1,63 +1,75 @@
 import tensorflow as tf
 from numpy.random import RandomState
+import numpy as np
 
-batch_size = 10
-dataset_size = 10000
+BATCH_SIZE = 1000
+DATASET_SIZE = 20000
 
 # 这是边权矩阵的定义
-w1 = tf.Variable([[1.87565053, -1.92562675, 2.03996181, -2.19880748],
-                  [2.06988621, -2.07578921, 1.89732957, -1.79729867]], trainable=True)
-w2 = tf.Variable([[-19.43003464],
-                  [87.04914856],
-                  [-18.81079865],
-                  [89.67340088]], trainable=True)
+w1 = tf.Variable(tf.random_normal([2, 4], stddev=0.1), trainable=True)
+w2 = tf.Variable(tf.random_normal([4, 16]), trainable=True)
+w3 = tf.Variable(tf.random_normal([16, 2]), trainable=True)
 
 # 这是输入节点和输出节点的定义
-x_ = tf.placeholder(tf.float32, shape=(None, 2), name="x-input")
-y_ = tf.placeholder(tf.float32, shape=(None, 1), name='y-input')
+x = tf.placeholder(tf.float32, shape=(None, 2), name="x-input")
+y_ = tf.placeholder(tf.float32, shape=(None, 2), name='y-input')
 
 # 这是中间节点的定义
-a = tf.sigmoid(tf.matmul(x_, w1))
-b = tf.sigmoid(tf.matmul(a, w2))
+a = tf.nn.sigmoid(tf.matmul(x, w1))
+b = tf.nn.sigmoid(a @ w2)
+y = tf.matmul(b, w3)
 
 # 这是 backprogation 算法的定义
-cross_entropy = tf.reduce_mean(tf.square(y_ - tf.clip_by_value(b, 0, 1.0)))
-train_step = tf.train.AdamOptimizer(0.001).minimize(cross_entropy)
+# cross_entropy = tf.reduce_mean(tf.square(y_ - tf.clip_by_value(y, 0, 1.0)))
+cross_entropy = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
+# cross_entropy = -tf.reduce_mean(y_ * tf.log(tf.nn.softmax(y)))
+
+# 设置指数衰减的学习率
+global_step = tf.Variable(0, trainable=False)
+learning_rate = tf.train.exponential_decay(
+    0.0001,
+    global_step,
+    DATASET_SIZE / BATCH_SIZE,
+    0.8,
+    staircase=True)
+
+train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy)
 
 # 以下是输入集和输出集的定义
 rdm = RandomState(1)
-# X= [[x1 * 0.001, 1 - 0.001 * x1] for x1 in range(0, 1000)]
-X = rdm.rand(dataset_size, 2)
-Y = [[int(x1 + x2 < 1.0)] for (x1, x2) in X]
+X = rdm.rand(DATASET_SIZE - 3000, 2)
+X_extern = [[x1 * 0.001, 1 - 0.001 * x1] for x1 in range(0, 1000)]
+x_extern2 = [[x1 * 0.001, 1 - 0.001 * x1 + .002] for x1 in range(0, 1000)]
+x_extern3 = [[x1 * 0.001, 1 - 0.001 * x1 - .001] for x1 in range(0, 1000)]
+X = np.row_stack((X, X_extern, x_extern2, x_extern3))
+
+Y = [[float(x1 + x2 < 1.0), float(x1 + x2 >= 1.0)] for (x1, x2) in X]
 
 with tf.Session() as sess:
-    init_op = tf.global_variables_initializer()
-    sess.run(init_op)
+    tf.global_variables_initializer().run()
 
     # 输出目前（未经训练）的参数取值
-    print("w1:", sess.run(w1))
-    print("w2:", sess.run(w2))
+    # print("w1:", sess.run(w1))
+    # print("w3:", sess.run(w3))
     print("\n")
 
     # 训练模型。
-    STEPS = 1
+    STEPS = 1000000
     for i in range(STEPS):
-        start = (i * batch_size) % dataset_size
-        end = (i * batch_size) % dataset_size + batch_size
-        sess.run(train_step, feed_dict={x_: X[start: end], y_: Y[start: end]})
-        if i % 1000 == 0:
-            total_cross_entropy = sess.run(cross_entropy, feed_dict={x_: X, y_: Y})
+        start = (i * BATCH_SIZE) % DATASET_SIZE
+        end = (i * BATCH_SIZE) % DATASET_SIZE + BATCH_SIZE
+        sess.run(train_step, feed_dict={x: X[start: end], y_: Y[start: end]})
+        if i % 10000 == 0:
+            total_cross_entropy = sess.run(cross_entropy, feed_dict={x: X, y_: Y})
             print("After %d training step(s), cross entropy on all data is %g" % (
                 i, total_cross_entropy))
-            print("w1:", sess.run(w1))
-            print("w2:", sess.run(w2))
 
-            print(sess.run(tf.clip_by_value(b, 1e-10, 1.0),
-                           feed_dict={x_: [[0.5465, 0.2111],
-                                           [0.21, 0.78],
-                                           [0.21, 0.79],
-                                           [0.8, 0.9555],
-                                           [0.8, 0.2],
-                                           [0.5, 0.5],
-                                           [0.3, 0.7],
-                                           [1.0, 0.01]]}))
+            print(sess.run(tf.clip_by_value(y, 1e-10, 1.0),
+                           feed_dict={x: [[0.5465, 0.2111],
+                           [0.21, 0.78],
+                           [0.21, 0.79],
+                           [0.8, 0.955],
+                           [0.8, 0.2],
+                           [0.5, 0.5],
+                           [0.3, 0.7],
+                           [1.0, 0.01]]}))
