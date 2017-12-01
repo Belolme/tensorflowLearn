@@ -1,5 +1,6 @@
 .vscode/
 MNIST_model/
-*/__pycache__/
+*__pycache__/
 .idea/
 */tmp/
+*log/
