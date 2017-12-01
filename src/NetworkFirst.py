@@ -27,10 +27,10 @@ cross_entropy = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(logits=y, 
 # 设置指数衰减的学习率
 global_step = tf.Variable(0, trainable=False)
 learning_rate = tf.train.exponential_decay(
-    0.0001,
+    0.001,
     global_step,
-    DATASET_SIZE / BATCH_SIZE,
-    0.8,
+    1000,
+    0.96,
     staircase=True)
 
 train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy)
@@ -58,7 +58,8 @@ with tf.Session() as sess:
     for i in range(STEPS):
         start = (i * BATCH_SIZE) % DATASET_SIZE
         end = (i * BATCH_SIZE) % DATASET_SIZE + BATCH_SIZE
-        sess.run(train_step, feed_dict={x: X[start: end], y_: Y[start: end]})
+        sess.run(train_step, feed_dict={x: X[start: end], y_: Y[start: end], global_step:i})
+
         if i % 10000 == 0:
             total_cross_entropy = sess.run(cross_entropy, feed_dict={x: X, y_: Y})
             print("After %d training step(s), cross entropy on all data is %g" % (
