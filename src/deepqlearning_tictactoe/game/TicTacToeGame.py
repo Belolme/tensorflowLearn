@@ -37,6 +37,9 @@ class TicTacToe:
         self.state = np.zeros([3, 3], dtype=int)  # init chessboard status
         self.terminal = TerminalStatus.GOING
 
+    def reset(self):
+        self.__init__()
+
     def setAction(self, action):
         """
         :param action: position of chessboard, data type is (x, y)
@@ -51,16 +54,14 @@ class TicTacToe:
             self.__updateTerminal(action)
             self.is_turn = IsTurnTo.WHITE if self.is_turn == IsTurnTo.BLACK else IsTurnTo.BLACK
 
-    def getState(self, chess_type):
+    def getState(self):
         """
         :return next_state, reward, terminal(terminal status)
         """
         reward = 0
-        if chess_type == IsTurnTo.BLACK and self.terminal == TerminalStatus.BLACK_WIN \
-                or chess_type == IsTurnTo.WHITE and self.terminal == TerminalStatus.WHITE_WIN:
+        if TerminalStatus.BLACK_WIN == self.terminal:
             reward = 1
-        elif chess_type == IsTurnTo.BLACK and self.terminal == TerminalStatus.WHITE_WIN \
-                or chess_type == IsTurnTo.WHITE and self.terminal == TerminalStatus.BLACK_WIN:
+        elif TerminalStatus.WHITE_WIN == self.terminal:
             reward = -1
 
         return self.state, reward, self.terminal
