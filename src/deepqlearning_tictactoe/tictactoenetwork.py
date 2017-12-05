@@ -10,12 +10,12 @@ import game.TicTacToeGame as game
 
 ACTIONS = 9  # number of valid actions
 GAMMA = 0.99  # decay rate of past observations
-OBSERVE = 100.  # timesteps to observe before training
-EXPLORE = 3000.  # frames over which to anneal epsilon
+OBSERVE = 1024.  # timesteps to observe before training
+EXPLORE = 1000.  # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001  # final value of epsilon
-INITIAL_EPSILON = 0.5  # starting value of epsilon
+INITIAL_EPSILON = 0.1  # starting value of epsilon
 REPLAY_MEMORY = 5000  # number of previous transitions to remember
-BATCH = 32  # size of minibatch
+BATCH = 256  # size of minibatch
 
 
 class DeepQNetwork:
@@ -63,6 +63,22 @@ class DeepQNetwork:
         cost = tf.reduce_mean(tf.square(output_label - readout_action))
         return cost
 
+    def getTrainStep(self, action, output_q, output_label):
+        with tf.variable_scope('loss_function'):
+            cost = self.getCostFun(action, output_q, output_label)
+
+        with tf.variable_scope('train'):
+            global_step = tf.Variable(0, trainable=False)
+            learning_rate = tf.train.exponential_decay(
+                1e-2,
+                global_step,
+                1000, 0.9,
+                staircase=True)
+            train_step = tf.train.AdamOptimizer(
+                learning_rate).minimize(cost, global_step=global_step)
+        
+        return train_step
+
     def train(self):
         # input layer
         with tf.variable_scope('input_tensor'):
@@ -70,16 +86,11 @@ class DeepQNetwork:
             output_label = tf.placeholder('float', [None])
             action = tf.placeholder('float', [None, ACTIONS])
 
-        output_q = self.createNetwork(input_tensor)
+        output_q_b = self.createNetwork(input_tensor)
+        output_q_w = self.createNetwork(input_tensor)
 
-        with tf.variable_scope('loss_function'):
-            cost = self.getCostFun(action, output_q, output_label)
-
-        with tf.variable_scope('train'):
-            global_step = tf.Variable(0, trainable=False)
-            learnig_rate = 1e-8
-            train_step = tf.train.GradientDescentOptimizer(
-                learnig_rate).minimize(cost, global_step=global_step)
+        train_step_b = self.getTrainStep(action, output_q_b, output_label)
+        train_step_w = self.getTrainStep(action, output_q_w, output_label)
 
         sess = tf.Session()
 
@@ -99,7 +110,8 @@ class DeepQNetwork:
         # start training
         epsilon = INITIAL_EPSILON
         times = 0
-        D = deque()
+        D_b = deque()
+        D_w = deque()
 
         # 黑子取 max_q, 白子取 min_q
         while True:
@@ -108,10 +120,15 @@ class DeepQNetwork:
                 my_game.reset()
 
             state = my_game.state
+            is_turn_to = my_game.is_turn
 
             # get current q value
-            next_q = sess.run(output_q,
-                              feed_dict={input_tensor: [state.reshape([3, 3, 1])]})[0]
+            if is_turn_to == game.IsTurnTo.BLACK:
+                next_q = sess.run(output_q_b,
+                                  feed_dict={input_tensor: [state.reshape([3, 3, 1])]})[0]
+            else:
+                next_q = sess.run(output_q_w,
+                                  feed_dict={input_tensor: state.reshape([1, 3, 3, 1])})[0]
 
             # get action index
             action_index = -1
@@ -125,11 +142,6 @@ class DeepQNetwork:
 
                 action_index = random.sample(random_set, 1)[0]
             else:
-                # current_state = DeepQNetwork.transferValueToOne(my_game.getState,
-                #                                                 game.IsTurnTo.BLANK)
-                # current_state = current_state.reshape(
-                #     [game.CHESSBOARD_SIZE ** 2])
-                # current_state = tf.multiply(current_state, next_q)
                 # print('------------', my_game.is_turn, '--------------')
                 if game.IsTurnTo.BLACK == my_game.is_turn:
                     action_index = DeepQNetwork.getMaxIndex(next_q, state.reshape([-1]),
@@ -150,27 +162,67 @@ class DeepQNetwork:
             print("action", action_position)
             my_game.setAction(action_position)
             next_state, reward, terminal = my_game.getState()
-            side = my_game.is_turn
 
-            if len(D) > 5000:
-                D.popleft()
-            D.append((state, side, action_tensor, reward, next_state, terminal))
+            if is_turn_to == game.IsTurnTo.BLACK:
+                if len(D_b) > 5000:
+                    D_b.popleft()
+                D_b.append((state, is_turn_to, action_tensor, reward, next_state, terminal))
+            else:
+                if len(D_w) > 5000:
+                    D_w.popleft()
+                D_w.append((state, is_turn_to, action_tensor, reward, next_state, terminal))
 
             if times > OBSERVE:
                 # sample a minibatch to train on
-                minibatch = random.sample(D, BATCH)
+                minibatch_b = random.sample(D_b, BATCH)
+                minibatch_w = random.sample(D_w, BATCH)
 
+                def getOutputQLabel(batch):
+                    side_batch = [d[1] for d in batch]
+                    reward_batch = [d[3] for d in batch]
+                    next_state_batch = [d[4].reshape([3,3,1]) for d in batch]
+
+                    return_batch = []
+                    for i in range(0, len(batch)):
+                        terminal = batch[i][5]
+                        if terminal != game.TerminalStatus.GOING:
+                            return_batch.append(reward_batch[i])
+                        else:
+                            if side_batch[i] == game.IsTurnTo.BLACK:
+                                next_q_1 = sess.run(output_q_w, feed_dict={input_tensor: [next_state_batch[i]]})[0]
+                                next_q_value = DeepQNetwork.getMinIndex(next_q_1,
+                                                                        next_state_batch[i].reshape([-1]),
+                                                                        game.IsTurnTo.BLANK.value)
+                            else:
+                                next_q_1 = sess.run(output_q_b, feed_dict={input_tensor: [next_state_batch[i]]})[0]
+                                next_q_value = DeepQNetwork.getMaxIndex(next_q_1,
+                                                                        next_state_batch[i].reshape([-1]),
+                                                                        game.IsTurnTo.BLANK.value)
+                            return_batch.append(reward_batch[i] + GAMMA * next_q_value)
+
+                    return return_batch
+                
+                output_q_b_batch = getOutputQLabel(minibatch_b)
+                output_q_w_batch = getOutputQLabel(minibatch_w)
+                # print(output_q_b_batch)
+
+                sess.run(train_step_b, feed_dict={action: [d[2] for d in minibatch_b],
+                                                    input_tensor: [d[0].reshape([3, 3, 1]) for d in minibatch_b],
+                                                    output_label: output_q_b_batch})
+                
+                sess.run(train_step_w, feed_dict={action: [d[2] for d in minibatch_w],
+                                                    input_tensor: [d[0].reshape([3, 3, 1]) for d in minibatch_w],
+                                                    output_label: output_q_w_batch})
+
+                """
                 # get the batch variables
-                state_batch = [d[0].reshape([3,3,1]) for d in minibatch]
+                state_batch = [d[0].reshape([3, 3, 1]) for d in minibatch]
                 side_batch = [d[1] for d in minibatch]
                 action_batch = [d[2] for d in minibatch]
                 reward_batch = [d[3] for d in minibatch]
-                next_state_batch = [d[4].reshape([3,3,1]) for d in minibatch]
+                next_state_batch = [d[4].reshape([3, 3, 1]) for d in minibatch]
 
                 y_batch = []
-                next_q_batch = sess.run(output_q,
-                                        feed_dict={input_tensor: next_state_batch})
-
                 for i in range(0, len(minibatch)):
                     terminal = minibatch[i][5]
                     if terminal:
@@ -178,12 +230,16 @@ class DeepQNetwork:
                     else:
                         next_q_value = 0
                         if side_batch[i] == game.IsTurnTo.BLACK:
-                            next_q_value = DeepQNetwork.getMaxIndex(next_q_batch[i],
-                                                                    next_state_batch[i].reshape([-1]),
+                            next_q_1 = sess.run(output_q_w, feed_dict={input_tensor: [next_state_batch[i]]})[0]
+                            next_q_value = DeepQNetwork.getMaxIndex(next_q_1,
+                                                                    next_state_batch[i].reshape(
+                                                                        [-1]),
                                                                     game.IsTurnTo.BLANK.value)
                         else:
-                            next_q_value = DeepQNetwork.getMinIndex(next_q_batch[i],
-                                                                    next_state_batch[i].reshape([-1]),
+                            next_q_1 = sess.run(output_q_b, feed_dict={input_tensor: [next_state_batch[i]]})[0]
+                            next_q_value = DeepQNetwork.getMinIndex(next_q_1,
+                                                                    next_state_batch[i].reshape(
+                                                                        [-1]),
                                                                     game.IsTurnTo.BLANK.value)
 
                         y_batch.append(reward_batch[i] + GAMMA * next_q_value)
@@ -193,6 +249,7 @@ class DeepQNetwork:
                     input_tensor: state_batch,
                     action: action_batch
                 })
+                """
 
             times += 1
 
@@ -210,11 +267,11 @@ class DeepQNetwork:
             else:
                 state = "train"
 
-            # if terminal != game.TerminalStatus.GOING:
-            print(terminal)
-            print("TIMESTEP", times, "/ STATE", state,
-                "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", reward,
-                "/ Q_MAX %s" % str(next_q))
+            if terminal != game.TerminalStatus.GOING:
+                print(terminal)
+                print("TIMESTEP", times, "/ STATE", state,
+                    "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", reward,
+                    "/ Q_MAX %s" % str(next_q))
 
     def getIndexWithOp(input_t, validate_t, validate_v, op):
         """
