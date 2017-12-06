@@ -18,6 +18,9 @@ y_ = tf.placeholder(tf.float32, shape=(None, 2), name='y-input')
 a = tf.nn.sigmoid(tf.matmul(x, w1))
 b = tf.nn.sigmoid(a @ w2)
 y = tf.matmul(b, w3)
+tf.summary.histogram("w1", w1)
+tf.summary.histogram("w2", w2)
+tf.summary.histogram("w3", w3)
 
 # 这是 backprogation 算法的定义
 # cross_entropy = tf.reduce_mean(tf.square(y_ - tf.clip_by_value(y, 0, 1.0)))

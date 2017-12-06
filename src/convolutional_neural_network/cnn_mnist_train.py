@@ -45,6 +45,7 @@ def train(mnist):
         logits=y, labels=tf.argmax(y_, 1))
     cross_entropy_mean = tf.reduce_mean(cross_entropy)
     loss = cross_entropy_mean + tf.add_n(tf.get_collection('losses'))
+    tf.summary.scalar('loss', loss)
 
     # config learning rate
     learning_rate = tf.train.exponential_decay(
@@ -52,6 +53,10 @@ def train(mnist):
         global_step,
         mnist.train.num_examples / BATCH_SIZE, LEARNING_RATE_DECAY,
         staircase=True)
+    tf.summary.scalar('learning_rate', learning_rate)
+
+    summ = tf.summary.merge_all()
+    writer = tf.summary.FileWriter('./datasets/log', tf.get_default_graph())
 
     # construct train step
     train_step = tf.train.GradientDescentOptimizer(
@@ -78,10 +83,12 @@ def train(mnist):
                                       cnn_mnist_inference.IMAGE_SIZE,
                                       cnn_mnist_inference.NUM_CHANNELS))
 
-            _, loss_value, step = sess.run(
-                [train_op, loss, global_step],
+            _, loss_value, step, s = sess.run(
+                [train_op, loss, global_step, summ],
                 feed_dict={x: reshaped_xs, y_: ys})
 
+            writer.add_summary(s, i)
+            
             if i % 1000 == 0:
                 print("After %d training step(s), loss on training batch is %g." % (
                     step, loss_value))

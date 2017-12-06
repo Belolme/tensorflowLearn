@@ -63,6 +63,12 @@ class TicTacToe:
             reward = 1
         elif TerminalStatus.WHITE_WIN == self.terminal:
             reward = -1
+        elif TerminalStatus.FLAT == self.terminal:
+            reward = 0
+        elif IsTurnTo.BLACK == self.is_turn:
+            reward = 0
+        elif IsTurnTo.WHITE == self.is_turn:
+            reward = 0
 
         return self.state, reward, self.terminal
 
