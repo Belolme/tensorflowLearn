@@ -60,9 +60,9 @@ class TicTacToe:
         """
         reward = 0
         if TerminalStatus.BLACK_WIN == self.terminal:
-            reward = 1
+            reward = 10
         elif TerminalStatus.WHITE_WIN == self.terminal:
-            reward = -1
+            reward = -10
         elif TerminalStatus.FLAT == self.terminal:
             reward = 0
         elif IsTurnTo.BLACK == self.is_turn:
@@ -73,10 +73,6 @@ class TicTacToe:
         return self.state, reward, self.terminal
 
     def __updateTerminal(self, action):
-        if np.min(self.state) != IsTurnTo.BLANK.value:
-            self.terminal = TerminalStatus.FLAT
-            return
-
         x, y = action
         count = 0
 
@@ -114,6 +110,11 @@ class TicTacToe:
                 self.terminal = TerminalStatus.BLACK_WIN
             else:
                 self.terminal = TerminalStatus.WHITE_WIN
+        elif np.min(self.state) != IsTurnTo.BLANK.value:
+            self.terminal = TerminalStatus.FLAT
+        else:
+            self.terminal = TerminalStatus.GOING
+
 
     def __getRange(self, x):
         return 0 if x - WIN_CHESS_COUNT + 1 <= 0 else x - WIN_CHESS_COUNT + 1,\
