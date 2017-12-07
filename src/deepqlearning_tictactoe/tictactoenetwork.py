@@ -15,8 +15,8 @@ EXPLORE = 20.  # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001  # final value of epsilon
 INITIAL_EPSILON = 0.1  # starting value of epsilon
 REPLAY_MEMORY = 1024  # number of previous transitions to remember
-BATCH = 16  # size of minibatch
-TRAIN_STEP = 100
+BATCH = 32  # size of minibatch
+TRAIN_STEP = 10
 
 
 class DeepQNetwork:
@@ -26,7 +26,8 @@ class DeepQNetwork:
         return tf.Variable(initial)
 
     def __biasVariable(shape):
-        initial = tf.constant(0.01, shape=shape)
+        # initial = tf.constant(0.01, shape=shape)
+        initial = tf.truncated_normal(shape, stddev=0.01)
         return tf.Variable(initial)
 
     def __conv2d(x, W, stride):
@@ -56,7 +57,7 @@ class DeepQNetwork:
             W_fc1 = DeepQNetwork.__weightVariable([576, 128])
             b_fc1 = DeepQNetwork.__biasVariable([128])
             h_conv2_flat = tf.reshape(h_conv2, [-1, 576])
-            h_fc1 = tf.nn.leaky_relu(tf.matmul(h_conv2_flat, W_fc1) + b_fc1)
+            h_fc1 = tf.nn.tanh(tf.matmul(h_conv2_flat, W_fc1) + b_fc1)
             tf.summary.histogram("weights_3", W_fc1)
             tf.summary.histogram("biases_3", b_fc1)
             tf.summary.histogram("activations_3", h_fc1)
@@ -157,9 +158,9 @@ class DeepQNetwork:
         with tf.variable_scope('train'):
             global_step = tf.Variable(0, trainable=False)
             learning_rate = tf.train.exponential_decay(
-                1e-2,
+                1e-1,
                 global_step,
-                500, 0.99,
+                5000, 0.96,
                 staircase=True)
             tf.summary.scalar('learning_rate', learning_rate)
 
@@ -181,94 +182,86 @@ class DeepQNetwork:
         train_step, loss = self.getTrainStepAndLossFun(action, output_q, output_label)
         summ = tf.summary.merge_all()
 
-        sess = tf.Session()
-
-        # saving and loading networks
-        saver = tf.train.Saver()
-        checkpoint = tf.train.get_checkpoint_state("saved_networks")
-        if checkpoint and checkpoint.model_checkpoint_path:
-            saver.restore(sess, checkpoint.model_checkpoint_path)
-            print("Successfully loaded:", checkpoint.model_checkpoint_path)
-        else:
-            sess.run(tf.global_variables_initializer())
-            print("Could not find old network weights")
-
-        # init game
-        my_game = game.TicTacToe()
-
-        # start training
-        epsilon = INITIAL_EPSILON
-        times = 0
-        D = deque()
-
-        writer = tf.summary.FileWriter('./datasets/log', tf.get_default_graph())
-
-        # 黑子取 max_q, 白子取 min_q
-        while True:
-            # 重新开局
-            if my_game.terminal != game.TerminalStatus.GOING:
-                my_game.reset()
-
-            state = my_game.state.copy()
-            is_turn_to = my_game.is_turn
-
-            # get current q value
-            next_q = sess.run(output_q,
-                            feed_dict={input_tensor: [state.reshape([3, 3, 1])]})[0]
-
-            # get action index
-            action_index = -1
-            action_tensor = np.zeros([ACTIONS])
-            if random.random() < epsilon:
-                print('-------random action----------')
-                random_set = []
-                for i, v in enumerate(state.reshape([-1])):
-                    if v == game.IsTurnTo.BLANK.value:
-                        random_set.append(i)
-
-                action_index = random.sample(random_set, 1)[0]
+        with tf.Session() as sess:
+            # saving and loading networks
+            saver = tf.train.Saver()
+            checkpoint = tf.train.get_checkpoint_state("saved_networks")
+            if checkpoint and checkpoint.model_checkpoint_path:
+                saver.restore(sess, checkpoint.model_checkpoint_path)
+                print("Successfully loaded:", checkpoint.model_checkpoint_path)
             else:
-                print('------------q value action--------------')
-                if game.IsTurnTo.BLACK == is_turn_to:
-                    action_index = DeepQNetwork.getMaxIndex(next_q, state.reshape([-1]),
-                                                            game.IsTurnTo.BLANK.value)
+                sess.run(tf.global_variables_initializer())
+                print("Could not find old network weights")
+
+            # init game
+            my_game = game.TicTacToe()
+
+            # start training
+            epsilon = INITIAL_EPSILON
+            times = 0
+            D = deque()
+
+            writer = tf.summary.FileWriter('./datasets/log', tf.get_default_graph())
+
+            # 黑子取 max_q, 白子取 min_q
+            while True:
+                # 重新开局
+                if my_game.terminal != game.TerminalStatus.GOING:
+                    my_game.reset()
+
+                state = my_game.state.copy()
+                is_turn_to = my_game.is_turn
+
+                # get current q value
+                next_q = sess.run(output_q,
+                                feed_dict={input_tensor: [state.reshape([3, 3, 1])]})[0]
+
+                # get action index
+                action_index = -1
+                action_tensor = np.zeros([ACTIONS])
+                if random.random() < epsilon:
+                    print('-------random action----------')
+                    random_set = []
+                    for i, v in enumerate(state.reshape([-1])):
+                        if v == game.IsTurnTo.BLANK.value:
+                            random_set.append(i)
+
+                    action_index = random.sample(random_set, 1)[0]
                 else:
-                    action_index = DeepQNetwork.getMinIndex(next_q, state.reshape([-1]),
-                                                            game.IsTurnTo.BLANK.value)
+                    print('------------q value action--------------')
+                    if game.IsTurnTo.BLACK == is_turn_to:
+                        action_index = DeepQNetwork.getMaxIndex(next_q, state.reshape([-1]),
+                                                                game.IsTurnTo.BLANK.value)
+                    else:
+                        action_index = DeepQNetwork.getMinIndex(next_q, state.reshape([-1]),
+                                                                game.IsTurnTo.BLANK.value)
 
-            action_tensor[action_index] = 1
-            choice_q_value = next_q[action_index]
+                action_tensor[action_index] = 1
+                choice_q_value = next_q[action_index]
 
-            # scale down epsilon
-            if epsilon > FINAL_EPSILON and len(D) > OBSERVE:
-                epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
+                # scale down epsilon
+                if epsilon > FINAL_EPSILON and len(D) > OBSERVE:
+                    epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
 
-            print(state)
-            action_position = (int(action_index / game.CHESSBOARD_SIZE),
-                               int(action_index % game.CHESSBOARD_SIZE))
-            print("action", action_position)
-            my_game.setAction(action_position)
-            next_state, reward, terminal = my_game.getState()
+                print(state)
+                action_position = (int(action_index / game.CHESSBOARD_SIZE),
+                                int(action_index % game.CHESSBOARD_SIZE))
+                print("action", action_position)
+                my_game.setAction(action_position)
+                next_state, reward, terminal = my_game.getState()
 
-            new_m = (state, is_turn_to, action_tensor.copy(), reward, next_state.copy(), terminal)
-            if len(D) > REPLAY_MEMORY:
-                D.popleft()
-            for d in D:
-                if np.array_equal(new_m[0], d[0]) and np.array_equal(new_m[2], d[2]):
-                    break
-            else:
-                D.append(new_m)
-            print('D lenght is: ',len(D))
-            print('new_m is ', new_m)
+                new_m = (state, is_turn_to, action_tensor.copy(), reward, next_state.copy(), terminal)
+                if len(D) > REPLAY_MEMORY:
+                    D.popleft()
+                for d in D:
+                    if np.array_equal(new_m[0], d[0]) and np.array_equal(new_m[2], d[2]):
+                        break
+                else:
+                    D.append(new_m)
+                print('D lenght is: ',len(D))
+                print('new_m is ', new_m)
 
-            if len(D) > OBSERVE:
-                for _ in range(0, TRAIN_STEP):
-                    # sample a minibatch to train on
-                    minibatch = random.sample(D, int(BATCH / 2))
-                    minibatch = []
-                    for i in range(0, int(BATCH / 2)):
-                        minibatch.append(D[-i])
-
+                if len(D) > OBSERVE:
                     def getOutputQLabel(batch):
                         side_batch = [d[1] for d in batch]
                         reward_batch = [d[3] for d in batch]
@@ -281,55 +274,65 @@ class DeepQNetwork:
                             q_value = sess.run(output_q, feed_dict={input_tensor: [batch[i][0].reshape([3, 3, 1])]})[0]
 
                             if terminal != game.TerminalStatus.GOING:
-                                q_value[np.argmax(action)] = reward_batch[i]
+                                q_value[np.argmax(batch[i][2])] = reward_batch[i]
                                 return_batch.append(q_value)
                             else:
                                 if side_batch[i] == game.IsTurnTo.BLACK:
                                     next_q_1 = sess.run(output_q, feed_dict={input_tensor: [next_state_batch[i]]})[0]
-                                    next_q_value = DeepQNetwork.getMinIndex(next_q_1,
+                                    next_q_value = next_q_1[DeepQNetwork.getMinIndex(next_q_1,
                                                                             next_state_batch[i].reshape([-1]),
-                                                                            game.IsTurnTo.BLANK.value)
+                                                                            game.IsTurnTo.BLANK.value)]
                                 else:
                                     next_q_1 = sess.run(output_q, feed_dict={input_tensor: [next_state_batch[i]]})[0]
-                                    next_q_value = DeepQNetwork.getMaxIndex(next_q_1,
+                                    next_q_value = next_q_1[DeepQNetwork.getMaxIndex(next_q_1,
                                                                             next_state_batch[i].reshape([-1]),
-                                                                            game.IsTurnTo.BLANK.value)
-                                q_value[np.argmax(action)] = reward_batch[i] + GAMMA * next_q_value
+                                                                            game.IsTurnTo.BLANK.value)]
+                                q_value[np.argmax(batch[i][2])] = reward_batch[i] + GAMMA * next_q_value
                                 return_batch.append(q_value)
 
                         return return_batch
-                    
-                    output_q_batch = getOutputQLabel(minibatch)
-                    # print(output_q_b_batch)
 
-                    _, loss_output, summ_output = sess.run([train_step, loss, summ], feed_dict={action: [d[2] for d in minibatch],
-                                                        input_tensor: [d[0].reshape([3, 3, 1]) for d in minibatch],
-                                                        output_label: output_q_batch})
-                    
-                    writer.add_summary(summ_output, times)
+                    loss_output = 100
+                    # sample a minibatch to train on
+                    minibatch = random.sample(D, int(BATCH / 2))
+                    for i in range(0, int(BATCH / 2)):
+                        minibatch.append(D[-i])
 
-            times += 1
+                    for _ in range(0, TRAIN_STEP):
+                        output_q_batch = getOutputQLabel(minibatch)
+                        # print(output_q_b_batch)
 
-            # save progress every 10000 iterations
-            if times % 1500 == 0:
-                saver.save(sess, "saved_networks/tictactoe-dqn",
-                           global_step=times)
+                        _, loss_output, summ_output = sess.run([train_step, loss, summ], feed_dict={action: [d[2] for d in minibatch],
+                                                            input_tensor: [d[0].reshape([3, 3, 1]) for d in minibatch],
+                                                            output_label: output_q_batch})
+                        
+                        writer.add_summary(summ_output, times)
 
-            # print info
-            state = ""
-            if times <= OBSERVE:
-                state = "observe"
-            elif times > OBSERVE and times <= OBSERVE + EXPLORE:
-                state = "explore"
-            else:
-                state = "train"
+                    if terminal == game.TerminalStatus.FLAT and loss_output < 1e-3 and epsilon <= FINAL_EPSILON:
+                        epsilon = 0.1
 
-            print(terminal)
-            print("TIMESTEP", times, "/ STATE", state,
-                "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", reward,
-                "/ Q_Choice %s" % choice_q_value)
-            print('loss output', loss_output)
-            print(next_q)
+                    times += 1
+
+                    # save progress every 10000 iterations
+                    if times % 100 == 0:
+                        saver.save(sess, "saved_networks/tictactoe-dqn",
+                                global_step=times)
+
+                    # print info
+                    state = ""
+                    if times <= OBSERVE:
+                        state = "observe"
+                    elif times > OBSERVE and times <= OBSERVE + EXPLORE:
+                        state = "explore"
+                    else:
+                        state = "train"
+
+                    print(terminal)
+                    print("TIMESTEP", times, "/ STATE", state,
+                        "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", reward,
+                        "/ Q_Choice %s" % choice_q_value)
+                    # print('loss output', loss_output)
+                    print(next_q)
 
     def getIndexWithOp(input_t, validate_t, validate_v, op):
         """
