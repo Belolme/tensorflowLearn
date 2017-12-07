@@ -11,12 +11,12 @@ import game.TicTacToeGame as game
 ACTIONS = 9  # number of valid actions
 GAMMA = 0.99  # decay rate of past observations
 OBSERVE = 128.  # timesteps to observe before training
-EXPLORE = 200.  # frames over which to anneal epsilon
+EXPLORE = 20.  # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001  # final value of epsilon
 INITIAL_EPSILON = 0.1  # starting value of epsilon
 REPLAY_MEMORY = 1024  # number of previous transitions to remember
 BATCH = 16  # size of minibatch
-TRAIN_STEP = 200
+TRAIN_STEP = 100
 
 
 class DeepQNetwork:
@@ -32,7 +32,7 @@ class DeepQNetwork:
     def __conv2d(x, W, stride):
         return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding="SAME")
 
-    def createNetwork(self, input_tensor):
+    def createNetworkWithCNN1(self, input_tensor):
         # network weights
         with tf.variable_scope('first_layout'):
             W_conv1 = DeepQNetwork.__weightVariable([2, 2, 1, 32])
@@ -71,8 +71,81 @@ class DeepQNetwork:
 
         return y
 
+    def createNetworkWithCNN2(self, input_tensor):
+        """
+        构建神经网络的结构
+        """
+        # 第一层卷积1
+        with tf.variable_scope('layer1-conv1'):
+            conv1_weights = tf.get_variable(
+                name="weight",
+                shape=[2, 2, 1, 32],
+                initializer=tf.truncated_normal_initializer(stddev=0.1)
+            )
+            conv1_biases = tf.get_variable(
+                name="bias",
+                shape=[32],
+                initializer=tf.constant_initializer(0.0)
+            )
+            conv1 = tf.nn.conv2d(input_tensor, conv1_weights,
+                                strides=[1, 1, 1, 1], padding='SAME')
+            relu1 = tf.nn.relu(tf.nn.bias_add(conv1, conv1_biases))
+
+        # 第二层池化1
+        with tf.name_scope("layer2-pool1"):
+            pool1 = tf.nn.max_pool(relu1, ksize=[1, 2, 2, 1], strides=[
+                1, 2, 2, 1], padding="SAME")
+
+        # 第三层卷积2
+        with tf.variable_scope("layer3-conv2"):
+            conv2_weights = tf.get_variable(
+                name="weight",
+                shape=[2, 2, 32, 64],
+                initializer=tf.truncated_normal_initializer(stddev=0.1)
+            )
+            conv2_biases = tf.get_variable(
+                name="bias",
+                shape=[64],
+                initializer=tf.constant_initializer(0.0)
+            )
+            conv2 = tf.nn.conv2d(pool1, conv2_weights, strides=[
+                1, 1, 1, 1], padding='SAME')
+            relu2 = tf.nn.relu(tf.nn.bias_add(conv2, conv2_biases))
+
+        # 把[batch, x-size, y-size, deep]4维矩阵转化为[batch, vector]2维矩阵
+        pool_shape = relu2.get_shape().as_list()
+        nodes = pool_shape[1] * pool_shape[2] * pool_shape[3]
+        reshaped = tf.reshape(relu2, [-1, nodes])
+
+        # 全连接层
+        with tf.variable_scope('layer5-fc1'):
+            fc1_weights = tf.get_variable(
+                name="weight",
+                shape=[nodes, 512],
+                initializer=tf.truncated_normal_initializer(stddev=0.1)
+            )
+
+            fc1_biases = tf.get_variable(
+                "bias", [512], initializer=tf.constant_initializer(0.1))
+
+            fc1 = tf.nn.relu(tf.matmul(reshaped, fc1_weights) + fc1_biases)
+
+        with tf.variable_scope('layer6-fc2'):
+            fc2_weights = tf.get_variable(
+                name="weight",
+                shape=[512, ACTIONS],
+                initializer=tf.truncated_normal_initializer(stddev=0.1)
+            )
+            fc2_biases = tf.get_variable(
+                "bias", [ACTIONS], initializer=tf.constant_initializer(0.1))
+            logit = tf.matmul(fc1, fc2_weights) + fc2_biases
+
+        return logit
+
+
     def getCostFun(self, action, output_q, output_label):
-        readout_action = tf.reduce_sum(tf.multiply(action, output_q), axis=1)
+        # readout_action = tf.reduce_sum(tf.multiply(action, output_q), axis=1)
+        readout_action = output_q
         cost = tf.reduce_mean(tf.square(output_label - readout_action))
         tf.summary.scalar('lost_value', cost)
         return cost
@@ -84,14 +157,14 @@ class DeepQNetwork:
         with tf.variable_scope('train'):
             global_step = tf.Variable(0, trainable=False)
             learning_rate = tf.train.exponential_decay(
-                1e-4,
+                1e-2,
                 global_step,
-                10000, 0.96,
+                500, 0.99,
                 staircase=True)
             tf.summary.scalar('learning_rate', learning_rate)
 
-            # learning_rate = 1e-4
-            train_step = tf.train.AdamOptimizer(
+            # learning_rate = 1e-2
+            train_step = tf.train.GradientDescentOptimizer(
                 learning_rate).minimize(cost, global_step=global_step)
         
         return train_step, cost
@@ -100,10 +173,10 @@ class DeepQNetwork:
         # input layer
         with tf.variable_scope('input_tensor'):
             input_tensor = tf.placeholder("float", [None, 3, 3, 1])
-            output_label = tf.placeholder('float', [None])
+            output_label = tf.placeholder('float', [None, 9])
             action = tf.placeholder('float', [None, ACTIONS])
 
-        output_q = self.createNetwork(input_tensor)
+        output_q = self.createNetworkWithCNN1(input_tensor)
 
         train_step, loss = self.getTrainStepAndLossFun(action, output_q, output_label)
         summ = tf.summary.merge_all()
@@ -136,7 +209,7 @@ class DeepQNetwork:
             if my_game.terminal != game.TerminalStatus.GOING:
                 my_game.reset()
 
-            state = my_game.state
+            state = my_game.state.copy()
             is_turn_to = my_game.is_turn
 
             # get current q value
@@ -167,7 +240,7 @@ class DeepQNetwork:
             choice_q_value = next_q[action_index]
 
             # scale down epsilon
-            if epsilon > FINAL_EPSILON and times > OBSERVE:
+            if epsilon > FINAL_EPSILON and len(D) > OBSERVE:
                 epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
 
             print(state)
@@ -177,15 +250,24 @@ class DeepQNetwork:
             my_game.setAction(action_position)
             next_state, reward, terminal = my_game.getState()
 
+            new_m = (state, is_turn_to, action_tensor.copy(), reward, next_state.copy(), terminal)
             if len(D) > REPLAY_MEMORY:
                 D.popleft()
-            D.append((state, is_turn_to, action_tensor, reward, next_state, terminal))
-            
+            for d in D:
+                if np.array_equal(new_m[0], d[0]) and np.array_equal(new_m[2], d[2]):
+                    break
+            else:
+                D.append(new_m)
+            print('D lenght is: ',len(D))
+            print('new_m is ', new_m)
 
-            if times > OBSERVE:
+            if len(D) > OBSERVE:
                 for _ in range(0, TRAIN_STEP):
                     # sample a minibatch to train on
-                    minibatch = random.sample(D, BATCH)
+                    minibatch = random.sample(D, int(BATCH / 2))
+                    minibatch = []
+                    for i in range(0, int(BATCH / 2)):
+                        minibatch.append(D[-i])
 
                     def getOutputQLabel(batch):
                         side_batch = [d[1] for d in batch]
@@ -195,8 +277,12 @@ class DeepQNetwork:
                         return_batch = []
                         for i in range(0, len(batch)):
                             terminal = batch[i][5]
+
+                            q_value = sess.run(output_q, feed_dict={input_tensor: [batch[i][0].reshape([3, 3, 1])]})[0]
+
                             if terminal != game.TerminalStatus.GOING:
-                                return_batch.append(reward_batch[i])
+                                q_value[np.argmax(action)] = reward_batch[i]
+                                return_batch.append(q_value)
                             else:
                                 if side_batch[i] == game.IsTurnTo.BLACK:
                                     next_q_1 = sess.run(output_q, feed_dict={input_tensor: [next_state_batch[i]]})[0]
@@ -208,14 +294,15 @@ class DeepQNetwork:
                                     next_q_value = DeepQNetwork.getMaxIndex(next_q_1,
                                                                             next_state_batch[i].reshape([-1]),
                                                                             game.IsTurnTo.BLANK.value)
-                                return_batch.append(reward_batch[i] + GAMMA * next_q_value)
+                                q_value[np.argmax(action)] = reward_batch[i] + GAMMA * next_q_value
+                                return_batch.append(q_value)
 
                         return return_batch
                     
                     output_q_batch = getOutputQLabel(minibatch)
                     # print(output_q_b_batch)
 
-                    _, summ_output = sess.run([train_step, summ], feed_dict={action: [d[2] for d in minibatch],
+                    _, loss_output, summ_output = sess.run([train_step, loss, summ], feed_dict={action: [d[2] for d in minibatch],
                                                         input_tensor: [d[0].reshape([3, 3, 1]) for d in minibatch],
                                                         output_label: output_q_batch})
                     
@@ -224,7 +311,7 @@ class DeepQNetwork:
             times += 1
 
             # save progress every 10000 iterations
-            if times % 100000 == 0:
+            if times % 1500 == 0:
                 saver.save(sess, "saved_networks/tictactoe-dqn",
                            global_step=times)
 
@@ -241,6 +328,7 @@ class DeepQNetwork:
             print("TIMESTEP", times, "/ STATE", state,
                 "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", reward,
                 "/ Q_Choice %s" % choice_q_value)
+            print('loss output', loss_output)
             print(next_q)
 
     def getIndexWithOp(input_t, validate_t, validate_v, op):

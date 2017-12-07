@@ -130,7 +130,7 @@ if __name__ == '__main__':
     game = TicTacToe()
     while game.terminal == TerminalStatus.GOING:
         print("is turn to %s terminal %s" % (game.is_turn, game.terminal))
-        print(game.state)
+        print(game.getState())
         next_action = tuple(int(x) for x in input().split(" "))
         game.setAction(next_action)
 
