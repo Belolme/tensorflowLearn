@@ -9,9 +9,9 @@ import tensorflow as tf
 import game.TicTacToeGame as game
 
 ACTIONS = 9  # number of valid actions
-GAMMA = 0.99  # decay rate of past observations
+GAMMA = .99  # decay rate of past observations
 OBSERVE = 128.  # timesteps to observe before training
-EXPLORE = 20.  # frames over which to anneal epsilon
+EXPLORE = 200.  # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001  # final value of epsilon
 INITIAL_EPSILON = 0.1  # starting value of epsilon
 REPLAY_MEMORY = 1024  # number of previous transitions to remember
@@ -31,12 +31,12 @@ class DeepQNetwork:
         return tf.Variable(initial)
 
     def __conv2d(x, W, stride):
-        return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding="SAME")
+        return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding="VALID")
 
     def createNetworkWithCNN1(self, input_tensor):
         # network weights
         with tf.variable_scope('first_layout'):
-            W_conv1 = DeepQNetwork.__weightVariable([2, 2, 1, 32])
+            W_conv1 = DeepQNetwork.__weightVariable([3, 3, 1, 32])
             b_conv1 = DeepQNetwork.__biasVariable([32])
             h_conv1 = tf.nn.leaky_relu(DeepQNetwork.__conv2d(
                 input_tensor, W_conv1, 1) + b_conv1)
@@ -44,20 +44,26 @@ class DeepQNetwork:
             tf.summary.histogram("biases_1", b_conv1)
             tf.summary.histogram("activations_1", h_conv1)
 
-        with tf.variable_scope('second_layout'):
-            W_conv2 = DeepQNetwork.__weightVariable([2, 2, 32, 64])
-            b_conv2 = DeepQNetwork.__biasVariable([64])
-            h_conv2 = tf.nn.leaky_relu(DeepQNetwork.__conv2d(
-                h_conv1, W_conv2, 1) + b_conv2)
-            tf.summary.histogram("weights_2", W_conv2)
-            tf.summary.histogram("biases_2", b_conv2)
-            tf.summary.histogram("activations_2", h_conv2)
+        # with tf.variable_scope('second_layout'):
+        #     W_conv2 = DeepQNetwork.__weightVariable([3, 3, 32, 64])
+        #     b_conv2 = DeepQNetwork.__biasVariable([64])
+        #     h_conv2 = tf.nn.leaky_relu(DeepQNetwork.__conv2d(
+        #         h_conv1, W_conv2, 1) + b_conv2)
+        #     tf.summary.histogram("weights_2", W_conv2)
+        #     tf.summary.histogram("biases_2", b_conv2)
+        #     tf.summary.histogram("activations_2", h_conv2)
+
+        # with tf.variable_scope('third_layout'):
+        #     w_conv3 = DeepQNetwork.__weightVariable([3, 3, 64, 64])
+        #     b_conv3 = DeepQNetwork.__biasVariable([64])
+        #     h_conv3 = tf.nn.leaky_relu(DeepQNetwork.__conv2d(
+        #     h_conv2, w_conv3, 1) + b_conv3)
 
         with tf.variable_scope('full_connect_layout'):
-            W_fc1 = DeepQNetwork.__weightVariable([576, 128])
+            W_fc1 = DeepQNetwork.__weightVariable([32, 128])
             b_fc1 = DeepQNetwork.__biasVariable([128])
-            h_conv2_flat = tf.reshape(h_conv2, [-1, 576])
-            h_fc1 = tf.nn.tanh(tf.matmul(h_conv2_flat, W_fc1) + b_fc1)
+            h_conv_flat = tf.reshape(h_conv1, [-1, 32])
+            h_fc1 = tf.nn.tanh(tf.matmul(h_conv_flat, W_fc1) + b_fc1)
             tf.summary.histogram("weights_3", W_fc1)
             tf.summary.histogram("biases_3", b_fc1)
             tf.summary.histogram("activations_3", h_fc1)
@@ -143,6 +149,18 @@ class DeepQNetwork:
 
         return logit
 
+    def createFCNetwork(input_tensor):
+        # 这是边权矩阵的定义
+        w1 = tf.Variable(tf.random_normal([9, 32], stddev=0.1), trainable=True)
+        w2 = tf.Variable(tf.random_normal([32, 64]), trainable=True)
+        w3 = tf.Variable(tf.random_normal([64, 9]), trainable=True)
+
+        # 这是中间节点的定义
+        a = tf.nn.sigmoid(tf.matmul(input_tensor, w1))
+        b = tf.nn.sigmoid(a @ w2)
+        y = tf.matmul(b, w3)
+
+        return y
 
     def getCostFun(self, action, output_q, output_label):
         # readout_action = tf.reduce_sum(tf.multiply(action, output_q), axis=1)
@@ -292,14 +310,13 @@ class DeepQNetwork:
 
                         return return_batch
 
-                    loss_output = 100
                     # sample a minibatch to train on
                     # minibatch = random.sample(D, int(BATCH / 2))
                     minibatch = []
                     for i in range(0, int(BATCH)):
                         minibatch.append(D[-i])
 
-                    for _ in range(0, TRAIN_STEP):
+                    while True:
                         output_q_batch = getOutputQLabel(minibatch)
                         # print(output_q_b_batch)
 
@@ -309,13 +326,16 @@ class DeepQNetwork:
                         
                         writer.add_summary(summ_output, times)
 
-                    if terminal == game.TerminalStatus.FLAT and loss_output < 1e-3 and epsilon <= FINAL_EPSILON:
+                        if loss_output < 0.1:
+                            break
+
+                    if loss_output < 0.1 and epsilon <= FINAL_EPSILON:
                         epsilon = 0.1
 
                     times += 1
 
                     # save progress every 10000 iterations
-                    if times % 100 == 0:
+                    if times % 1000 == 0:
                         saver.save(sess, "saved_networks/tictactoe-dqn",
                                 global_step=times)
 
