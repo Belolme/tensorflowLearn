@@ -16,7 +16,7 @@ FINAL_EPSILON = 0.0001  # final value of epsilon
 INITIAL_EPSILON = 0.1  # starting value of epsilon
 REPLAY_MEMORY = 1024  # number of previous transitions to remember
 BATCH = 32  # size of minibatch
-TRAIN_STEP = 10
+TRAIN_STEP = 100
 
 
 class DeepQNetwork:
@@ -158,7 +158,7 @@ class DeepQNetwork:
         with tf.variable_scope('train'):
             global_step = tf.Variable(0, trainable=False)
             learning_rate = tf.train.exponential_decay(
-                1e-1,
+                1e-2,
                 global_step,
                 5000, 0.96,
                 staircase=True)
@@ -253,11 +253,11 @@ class DeepQNetwork:
                 new_m = (state, is_turn_to, action_tensor.copy(), reward, next_state.copy(), terminal)
                 if len(D) > REPLAY_MEMORY:
                     D.popleft()
-                for d in D:
-                    if np.array_equal(new_m[0], d[0]) and np.array_equal(new_m[2], d[2]):
-                        break
-                else:
-                    D.append(new_m)
+                # for d in D:
+                    # if np.array_equal(new_m[0], d[0]) and np.array_equal(new_m[2], d[2]):
+                        # break
+                # else:
+                D.append(new_m)
                 print('D lenght is: ',len(D))
                 print('new_m is ', new_m)
 
@@ -294,8 +294,9 @@ class DeepQNetwork:
 
                     loss_output = 100
                     # sample a minibatch to train on
-                    minibatch = random.sample(D, int(BATCH / 2))
-                    for i in range(0, int(BATCH / 2)):
+                    # minibatch = random.sample(D, int(BATCH / 2))
+                    minibatch = []
+                    for i in range(0, int(BATCH)):
                         minibatch.append(D[-i])
 
                     for _ in range(0, TRAIN_STEP):

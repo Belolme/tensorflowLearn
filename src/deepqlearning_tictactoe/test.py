@@ -75,7 +75,7 @@ def getTrainStepAndLossFun(action, output_q, output_label):
     with tf.variable_scope('train'):
         global_step = tf.Variable(0, trainable=False)
         learning_rate = tf.train.exponential_decay(
-            0.1,
+            0.01,
             global_step,
             500, 0.96,
             staircase=True)
