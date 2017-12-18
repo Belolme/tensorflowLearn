@@ -18,28 +18,34 @@ def __biasVariable(shape):
 
 
 def __conv2d(x, W, stride):
-    return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding="SAME")
+    return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding="VALID")
 
 
 def createNetwork(input_tensor):
     # network weights
     with tf.variable_scope('first_layout'):
-        W_conv1 = __weightVariable([2, 2, 1, 32])
+        W_conv1 = __weightVariable([3, 3, 1, 32])
         b_conv1 = __biasVariable([32])
         h_conv1 = tf.nn.leaky_relu(__conv2d(
             input_tensor, W_conv1, 1) + b_conv1)
 
-    with tf.variable_scope('second_layout'):
-        W_conv2 = __weightVariable([2, 2, 32, 64])
-        b_conv2 = __biasVariable([64])
-        h_conv2 = tf.nn.leaky_relu(__conv2d(
-            h_conv1, W_conv2, 1) + b_conv2)
+    # with tf.variable_scope('second_layout'):
+    #     W_conv2 = __weightVariable([3, 3, 32, 64])
+    #     b_conv2 = __biasVariable([64])
+    #     h_conv2 = tf.nn.leaky_relu(__conv2d(
+    #         h_conv1, W_conv2, 1) + b_conv2)
+
+    # with tf.variable_scope('third_layout'):
+    #     w_conv3 = __weightVariable([3, 3, 64, 64])
+    #     b_conv3 = __biasVariable([64])
+    #     h_conv3 = tf.nn.leaky_relu(__conv2d(
+    #         h_conv2, w_conv3, 1) + b_conv3)
 
     with tf.variable_scope('full_connect_layout'):
-        W_fc1 = __weightVariable([64*9, 128])
+        W_fc1 = __weightVariable([32, 128])
         b_fc1 = __biasVariable([128])
-        h_conv2_flat = tf.reshape(h_conv2, [-1, 64 *9])
-        h_fc1 = tf.nn.tanh(tf.matmul(h_conv2_flat, W_fc1) + b_fc1)
+        h_conv_flat = tf.reshape(h_conv1, [-1, 32])
+        h_fc1 = tf.nn.tanh(tf.matmul(h_conv_flat, W_fc1) + b_fc1)
 
     with tf.variable_scope('output_layout'):
         W_fc2 = __weightVariable([128, ACTIONS])
@@ -162,7 +168,7 @@ def main():
                         next_q_value = next_q_1[getMaxIndex(next_q_1,
                                                     next_state_batch[i].reshape([-1]),
                                                     game.IsTurnTo.BLANK.value)]
-                    q_value[np.argmax(batch[i][2])] = reward_batch[i] + 0.99 * next_q_value
+                    q_value[np.argmax(batch[i][2])] = reward_batch[i] + 2 * next_q_value
                     # print(next_q_1)
                     # print(next_q_value)
                     return_batch.append(q_value)
@@ -180,7 +186,7 @@ def main():
             times += 1
             print('lose result:', loss_result, 'times: ', times)
 
-            if times % 999 == 0:
+            if times % 100 == 0:
                 state1 =  minibatch[0][0].reshape([1, 3, 3, 1])
                 # print('state1', state1)
                 print(sess.run(y, feed_dict={input_tensor:state1}))
