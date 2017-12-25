@@ -1,7 +1,9 @@
 from game import *
 
+
 def strOfNpArray(a):
     return 'np.array(' + str(a.tolist()) + ')'
+
 
 def strListChoice(choice):
     num = numChoice(choice)
@@ -9,8 +11,10 @@ def strListChoice(choice):
     list_tmp[num] = 1.
     return'np.array(' + str(list_tmp) + ')'
 
+
 def strNumChoice(choice):
     return str(numChoice(choice))
+
 
 def numChoice(choice):
     return choice[0] * 3 + choice[1]
@@ -36,5 +40,3 @@ if __name__ == '__main__':
             + strNumChoice(my_choice) + ')'
 
     print(output)
-
-

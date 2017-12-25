@@ -7,6 +7,7 @@ from math import inf as infinity
 
 PLAYOUT_TIMES = 100
 
+
 class UCB:
     """
     selection algorithm
