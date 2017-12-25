@@ -5,6 +5,7 @@ from math import sqrt
 from math import log as ln
 from math import inf as infinity
 
+PLAYOUT_TIMES = 100
 
 class UCB:
     """
@@ -17,8 +18,10 @@ class UCB:
     def __call__(self, weight, count, parent_count):
         if count == 0:
             return 1
-
         return weight + self.ex * sqrt(ln(parent_count) / count)
+
+
+ucb = UCB()
 
 
 class Node:
@@ -34,7 +37,7 @@ class Node:
 
     def __str__(self, level=0):
         ret = "|{}{}{}/{}\n".format("---|" * level, str(self.action),
-                                  str(self.weight), str(self.visits))
+                                    str(self.weight), str(self.visits))
         for child in self.children:
             ret += child.__str__(level + 1)
         return ret
@@ -44,81 +47,71 @@ class Node:
         self.children.append(node)
 
 
-def monteCarloTreeSearch(treeNode, gameboard):
-    ucb = UCB()
-
-    while treeNode.visits < 100000:
-        ptr = treeNode
-        game_tmp = copy.deepcopy(gameboard)
-
-        # Selection
-        while len(ptr.children) > 0:
-            if game_tmp.is_turn == IsTurnTo.BLACK:
-                index, child = max(enumerate(ptr.children), key=lambda i: ucb(
-                    i[1].weight, i[1].visits, ptr.visits))
-            else:
-                index, child = max(enumerate(ptr.children), key=lambda i: ucb(
-                    -i[1].weight, i[1].visits, ptr.visits))
-            ptr = ptr.children[index]
-            game_tmp.setAction(child.action)
-
-        # Expansion
-        minmax = False
-
-        if game_tmp.terminal == TerminalStatus.GOING:
-            validationAction = game_tmp.getValidationAction()
-            for a in validationAction:
-                ptr.insert(Node(a))
-
-            randSelect = random.randint(0, len(validationAction) - 1)
-            ptr = ptr.children[randSelect]
-
-            # Simulation
-            action = ptr.action
-            while True:
-                game_tmp.setAction(action)
-                if game_tmp.terminal != TerminalStatus.GOING:
-                    break
-                action = random.sample(
-                    game_tmp.getValidationAction(), 1)[0]
-
-            winner = game_tmp.terminal
+def selectUBCMoveNode(treeNode, gameboard):
+    if gameboard.terminal == TerminalStatus.GOING:
+        if gameboard.is_turn == IsTurnTo.BLACK:
+            child = max(treeNode.children, key=lambda i: ucb(
+                i.weight, i.visits, treeNode.visits))
         else:
-            # 走到这里的时候说明整一棵树已经构建完成了，使用 minmax 进行反向传播
-            minmax = True
-
-        # Backpropagation
-        if minmax:
-            ptr.visits += 1
-            is_turn = game_tmp.is_turn
-            
-            _, new_weight, _ = game_tmp.getState()
-            ptr.weight = new_weight
-
-            while not (ptr is treeNode):
-                if is_turn == IsTurnTo.BLACK:
-                    new_weight_child = min(ptr.parent.children,
-                                     key=lambda i: i.weight)
-                else:
-                    new_weight_child = max(ptr.parent.children,
-                                     key=lambda i: i.weight)
-
-                ptr = ptr.parent
-                ptr.visits += 1
-                ptr.weight = new_weight_child.weight
-                is_turn = is_turn.transfer()
-        else:
-            _, new_weight, _ = game_tmp.getState()
-            while not (ptr is treeNode.parent):
-                ptr.weight = (ptr.weight * ptr.visits +
-                              new_weight) / (ptr.visits + 1)
-                ptr.visits += 1
-                ptr = ptr.parent
+            child = max(treeNode.children, key=lambda i: ucb(
+                -i.weight, i.visits, treeNode.visits))
+        return child
+    else:
+        return None
 
 
-def getAIMoveNode(tNode, game=None):
-    if game is not None:
-        if game.terminal == IsTurnTo.BLACK:
+def selectionAndExpansion(treeNode, gameboard):
+    game_tmp = copy.deepcopy(gameboard)
+    ptr = treeNode
+    while game_tmp.terminal == TerminalStatus.GOING:
+        if len(ptr.children) == 0:
+            validation_actions = game_tmp.getValidationAction()
+            for action in validation_actions:
+                ptr.insert(Node(action, ptr))
+
+            selected_action_index = random.randint(
+                0, len(validation_actions) - 1)
+            ptr = ptr.children[selected_action_index]
+            game_tmp.setAction(ptr.action)
+            return ptr, game_tmp
+
+        ptr = selectUBCMoveNode(ptr, game_tmp)
+        game_tmp.setAction(ptr.action)
+
+    return ptr, game_tmp
+
+
+def backpropagation(tailNode, rootNode, z):
+    ptr = tailNode
+    while ptr is not rootNode.parent:
+        ptr.weight = (ptr.weight * ptr.visits + z) / (ptr.visits + 1)
+        ptr.visits += 1
+        ptr = ptr.parent
+
+
+def simDefault(board):
+    game_tmp = copy.deepcopy(board)
+
+    while game_tmp.terminal == TerminalStatus.GOING:
+        validation_actions = game_tmp.getValidationAction()
+        action_index = random.randint(0, len(validation_actions) - 1)
+        action = validation_actions[action_index]
+        game_tmp.setAction(action)
+
+    _, weight, _ = game_tmp.getState()
+    return weight
+
+
+def mcts(treeNode, gamebaord):
+    while treeNode.visits < PLAYOUT_TIMES:
+        selected_node, game_tmp = selectionAndExpansion(treeNode, gamebaord)
+        z = simDefault(game_tmp)
+        backpropagation(selected_node, treeNode, z)
+
+
+def getAIMoveNode(tNode, gameboard=None):
+    if gameboard is not None:
+        if gameboard.is_turn == IsTurnTo.BLACK:
             return max(tNode.children, key=lambda e: e.weight)
         else:
             return min(tNode.children, key=lambda e: e.weight)
@@ -126,53 +119,52 @@ def getAIMoveNode(tNode, game=None):
         return max(tNode.children, key=lambda e: e.weight)
 
 
-def playWithMCTS():
+def playWithHuman():
     root = Node()
-    game = TicTacToe()
+    my_game = TicTacToe()
 
-    while game.terminal == TerminalStatus.GOING:
-        monteCarloTreeSearch(root, game)
+    while my_game.terminal == TerminalStatus.GOING:
+        mcts(root, my_game)
         root = getAIMoveNode(root)
-        game.setAction(root.action)
-        print(str(game), root.weight, '/', root.visits)
+        my_game.setAction(root.action)
+        print(str(my_game), root.weight, '/', root.visits)
         # print(str(game), root.weight,'/', root.visits, 'in', [c.weight for c in root.parent.children])
 
         choice = input("input you position: ").split(' ')
 
-        humanAction = (int(choice[0]), int(choice[1]))
-        game.setAction(humanAction)
+        human_action = (int(choice[0]), int(choice[1]))
+        my_game.setAction(human_action)
 
-        for childNode in root.children:
-            if childNode.action == humanAction:
-                root = childNode
+        for child_node in root.children:
+            if child_node.action == human_action:
+                root = child_node
                 break
 
-        print(str(game))
+        print(str(my_game))
 
 
 def MCTSTest():
-    game = TicTacToe()
-    game.setAction((1, 1))
-    game.setAction((0, 1))
-    game.setAction((0, 0))
-    game.setAction((2, 2))
-    game.setAction((1, 0))
-    game.setAction((0, 2))
-    
-    # game.setAction((1, 2))
-    # game.setAction((2, 0))
-    # game.setAction((2, 1))
+    my_game = TicTacToe()
+    my_game.setAction((1, 1))
+    my_game.setAction((0, 1))
+    my_game.setAction((0, 0))
+    my_game.setAction((2, 2))
+    my_game.setAction((1, 0))
+    my_game.setAction((2, 0))
 
-    print(game.terminal)
-    print(game.getValidationAction())
+    # my_game.setAction((1, 2))
+    # my_game.setAction((0, 2))
+    # my_game.setAction((2, 1))
+
+    print(my_game.terminal)
+    print(my_game.getValidationAction())
 
     root = Node()
-    monteCarloTreeSearch(root, game)
+    mcts(root, my_game)
     print(root)
-    print(getAIMoveNode(root, game).action)
+    print(getAIMoveNode(root, my_game).action)
 
 
 if __name__ == '__main__':
     # MCTSTest()
-    playWithMCTS()
-  
+    playWithHuman()

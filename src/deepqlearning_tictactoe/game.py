@@ -4,6 +4,12 @@ Tic Tac Toe game
 from enum import Enum
 import numpy as np
 
+# win chess count
+WIN_CHESS_COUNT = 3
+
+# CHESSBOARD SIZE
+CHESSBOARD_SIZE = 3
+
 
 class TerminalStatus(Enum):
     """
@@ -32,17 +38,11 @@ class IsTurnTo(Enum):
             return self
 
 
-# win chess count
-WIN_CHESS_COUNT = 4
-
-# CHESSBOARD SIZE
-CHESSBOARD_SIZE = 5
-
-
 class TicTacToe:
     def __init__(self):
         self.is_turn = IsTurnTo.BLACK
-        self.state = np.zeros([CHESSBOARD_SIZE, CHESSBOARD_SIZE], dtype=int)  # init chessboard status
+        # init chessboard status
+        self.state = np.zeros([CHESSBOARD_SIZE, CHESSBOARD_SIZE], dtype=int)
         self.terminal = TerminalStatus.GOING
 
     def reset(self):
@@ -54,7 +54,7 @@ class TicTacToe:
         """
         x, y = action
         if self.state[x][y] != IsTurnTo.BLANK.value:
-            raise AttributeError
+            raise AttributeError('invalidate %d, %d' % (x, y))
         elif self.terminal != TerminalStatus.GOING:
             raise GameOverError
         else:
@@ -74,7 +74,6 @@ class TicTacToe:
 
         return result
 
-
     def getState(self):
         """
         :return next_state, reward, terminal(terminal status)
@@ -93,7 +92,6 @@ class TicTacToe:
 
         return self.state, reward, self.terminal
 
-
     def __updateTerminal(self, action):
         x, y = action
         count = 0
@@ -108,13 +106,12 @@ class TicTacToe:
 
                 if flag >= WIN_CHESS_COUNT:
                     return 1
-            
+
             return 0
 
         # - judge
         f_p, t_p = self.__getRange(y)
         count += judge(self.state[x, f_p: t_p])
-
 
         # | judge
         f_p, t_p = self.__getRange(x)
@@ -139,7 +136,6 @@ class TicTacToe:
         else:
             self.terminal = TerminalStatus.GOING
 
-
     def __getRange(self, x):
         return 0 if x - WIN_CHESS_COUNT + 1 <= 0 else x - WIN_CHESS_COUNT + 1,\
             CHESSBOARD_SIZE if x + WIN_CHESS_COUNT >= CHESSBOARD_SIZE else x + WIN_CHESS_COUNT
@@ -152,8 +148,19 @@ class TicTacToe:
         return new_copy
 
     def __str__(self):
-        res = ''
+        res = '    '
         for i in range(CHESSBOARD_SIZE):
+            res += '%d ' % i
+
+        res += '\n    '
+
+        for i in range(CHESSBOARD_SIZE):
+            res += '- '
+
+        res += '\n'
+
+        for i in range(CHESSBOARD_SIZE):
+            res += '%d | ' % i
             for j in range(CHESSBOARD_SIZE):
                 res += str(self.state[i][j]) + ' '
             res += '\n'
