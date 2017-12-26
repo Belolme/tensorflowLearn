@@ -1,19 +1,19 @@
 import tensorflow as tf
 import numpy as np
-import game.TicTacToeGame as game
+import game
 
 ACTIONS = 9
 
 
 def __weightVariable(shape):
     initial = tf.truncated_normal(shape, stddev=0.01)
-    # initial = tf.constant(0.01, shape=shape)
+    initial = tf.constant(0.00, shape=shape)
     return tf.Variable(initial)
 
 
 def __biasVariable(shape):
     initial = tf.truncated_normal(shape, stddev=0.01)
-    initial = tf.constant(0.01, shape=shape)
+    initial = tf.constant(0.00, shape=shape)
     return tf.Variable(initial)
 
 
@@ -54,6 +54,7 @@ def createNetwork(input_tensor):
 
     return y
 
+
 def createNetwork2(input_tensor):
     # 这是边权矩阵的定义
     w1 = tf.Variable(tf.random_normal([9, 32], stddev=0.1), trainable=True)
@@ -67,12 +68,14 @@ def createNetwork2(input_tensor):
 
     return y
 
+
 def getCostFun(action, output_q, output_label):
     # readout_action = tf.reduce_sum(tf.multiply(action, output_q), axis=1)
     readout_action = output_q
     cost = tf.reduce_mean(tf.square(output_label - readout_action))
     tf.summary.scalar('lost_value', cost)
     return cost
+
 
 def getTrainStepAndLossFun(action, output_q, output_label):
     with tf.variable_scope('loss_function'):
@@ -93,6 +96,7 @@ def getTrainStepAndLossFun(action, output_q, output_label):
     
     return train_step, cost
 
+
 def getIndexWithOp(input_t, validate_t, validate_v, op):
     """
     get index in set of input_t and validate_t equal validate_v and op is True
@@ -107,13 +111,16 @@ def getIndexWithOp(input_t, validate_t, validate_v, op):
 
     return result
 
+
 def getMaxIndex(input_t, validate_t, validate_v):
     return getIndexWithOp(input_t, validate_t, validate_v,
                                         lambda x, y: x > y)
 
+
 def getMinIndex(input_t, validate_t, validate_v):
     return getIndexWithOp(input_t, validate_t, validate_v,
                                         lambda x, y: x < y)
+
 
 def main():
     with tf.Session() as sess:
@@ -128,18 +135,26 @@ def main():
         sess.run(tf.initialize_all_variables())
 
         minibatch = [
-                        (np.array([[1, 2, 1],[1, 1, 2],[0, 2, 2]]), game.IsTurnTo.BLACK, np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.]), 10,
-                            np.array([[1, 2, 1],[1, 1, 2],[2, 2, 2]]), game.TerminalStatus.BLACK_WIN, 6),
-                        (np.array([[1, 0, 1],[2, 0, 2],[0, 0, 2]]), game.IsTurnTo.WHITE, np.array([ 0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]), -10, 
-                            np.array([[1, 1, 1],[2, 0, 2],[0, 0, 2]]), game.TerminalStatus.WHITE_WIN, 1),
-                        (np.array([[2, 0, 0],[1, 1, 0],[2, 0, 0]]), game.IsTurnTo.BLACK, np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.]), 0, 
-                            np.array([[2, 0, 0],[1, 1, 0],[2, 2, 0]]), game.TerminalStatus.GOING, 7),
-                        (np.array([[2, 0, 0],[1, 1, 0],[2, 2, 0]]), game.IsTurnTo.WHITE, np.array([ 0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.]), -10, 
-                            np.array([[2, 0, 0],[1, 1, 1],[2, 2, 0]]), game.TerminalStatus.WHITE_WIN, 5),
-                        (np.array([[0, 2, 1],[2, 1, 0],[2, 0, 0]]), game.IsTurnTo.WHITE, np.array([ 0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.]), 0, 
-                            np.array([[0, 2, 1],[2, 1, 1],[2, 0, 0]]), game.TerminalStatus.GOING, 5),
-                        (np.array([[0, 2, 1],[2, 1, 1],[2, 0, 0]]), game.IsTurnTo.BLACK, np.array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]), 10, 
-                            np.array([[2, 2, 1],[2, 1, 1],[2, 0, 0]]), game.TerminalStatus.BLACK_WIN, 0),
+            # (np.array([[1, 2, 1],[1, 1, 2],[0, 2, 2]]), game.IsTurnTo.BLACK, np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.]), 10,
+            #     np.array([[1, 2, 1],[1, 1, 2],[2, 2, 2]]), game.TerminalStatus.BLACK_WIN, 6),
+            # (np.array([[1, 0, 1],[2, 0, 2],[0, 0, 2]]), game.IsTurnTo.WHITE, np.array([ 0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]), -10,
+            #     np.array([[1, 1, 1],[2, 0, 2],[0, 0, 2]]), game.TerminalStatus.WHITE_WIN, 1),
+            # (np.array([[2, 0, 0],[1, 1, 0],[2, 0, 0]]), game.IsTurnTo.BLACK, np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.]), 0,
+            #     np.array([[2, 0, 0],[1, 1, 0],[2, 2, 0]]), game.TerminalStatus.GOING, 7),
+            # (np.array([[2, 0, 0],[1, 1, 0],[2, 2, 0]]), game.IsTurnTo.WHITE, np.array([ 0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.]), -10,
+            #     np.array([[2, 0, 0],[1, 1, 1],[2, 2, 0]]), game.TerminalStatus.WHITE_WIN, 5),
+            # (np.array([[0, 2, 1],[2, 1, 0],[2, 0, 0]]), game.IsTurnTo.WHITE, np.array([ 0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.]), 0,
+            #     np.array([[0, 2, 1],[2, 1, 1],[2, 0, 0]]), game.TerminalStatus.GOING, 5),
+            # (np.array([[0, 2, 1],[2, 1, 1],[2, 0, 0]]), game.IsTurnTo.BLACK, np.array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]), 10,
+            #     np.array([[2, 2, 1],[2, 1, 1],[2, 0, 0]]), game.TerminalStatus.BLACK_WIN, 0),
+
+            (np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]), 0, np.array([[0, 0, 0], [0, 2, 0], [0, 0, 0]]), game.TerminalStatus.GOING, 4), 
+            (np.array([[0, 0, 0], [0, 2, 0], [0, 0, 0]]), game.IsTurnTo.WHITE, np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 0, np.array([[1, 0, 0], [0, 2, 0], [0, 0, 0]]), game.TerminalStatus.GOING, 0), 
+            (np.array([[1, 0, 0], [0, 2, 0], [0, 0, 0]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]), 0, np.array([[1, 0, 0], [0, 2, 0], [2, 0, 0]]), game.TerminalStatus.GOING, 6),
+            (np.array([[1, 0, 0], [0, 2, 0], [2, 0, 0]]), game.IsTurnTo.WHITE, np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 0, np.array([[1, 1, 0], [0, 2, 0], [2, 0, 0]]), game.TerminalStatus.GOING, 1),
+            (np.array([[1, 1, 0], [0, 2, 0], [2, 0, 0]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]), 0, np.array([[1, 1, 0], [0, 2, 0], [2, 0, 2]]), game.TerminalStatus.GOING, 8), 
+            (np.array([[1, 1, 0], [0, 2, 0], [2, 0, 2]]), game.IsTurnTo.WHITE, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]), 0, np.array([[1, 1, 0], [0, 2, 0], [2, 1, 2]]), game.TerminalStatus.GOING, 7), 
+            (np.array([[1, 1, 0], [0, 2, 0], [2, 1, 2]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 1, np.array([[1, 1, 2], [0, 2, 0], [2, 1, 2]]), game.TerminalStatus.BLACK_WIN, 2)
                     ]
 
         def getOutputQLabel(batch):
@@ -168,7 +183,7 @@ def main():
                         next_q_value = next_q_1[getMaxIndex(next_q_1,
                                                     next_state_batch[i].reshape([-1]),
                                                     game.IsTurnTo.BLANK.value)]
-                    q_value[np.argmax(batch[i][2])] = reward_batch[i] + 2 * next_q_value
+                    q_value[np.argmax(batch[i][2])] = reward_batch[i] + 1 * next_q_value
                     # print(next_q_1)
                     # print(next_q_value)
                     return_batch.append(q_value)
@@ -176,9 +191,9 @@ def main():
             return return_batch
 
         times = 0
-        for _ in range(0, 200):
+        for _ in range(0, 10):
             output_q_batch = getOutputQLabel(minibatch)
-            # print(output_q_batch)
+            print(output_q_batch)
             _, loss_result = sess.run([train_step,loss],  feed_dict={action: [d[2] for d in minibatch],
                                     input_tensor: [d[0].reshape([3, 3, 1]) for d in minibatch],
                                     output_label: output_q_batch})
@@ -187,11 +202,11 @@ def main():
             print('lose result:', loss_result, 'times: ', times)
 
             if times % 100 == 0:
-                state1 =  minibatch[0][0].reshape([1, 3, 3, 1])
+                state1 = minibatch[6][0].reshape([1, 3, 3, 1])
                 # print('state1', state1)
-                print(sess.run(y, feed_dict={input_tensor:state1}))
+                print(sess.run(y, feed_dict={input_tensor: state1}))
 
-                state2 = minibatch[1][0].reshape([1, 3, 3, 1])
+                state2 = minibatch[0][0].reshape([1, 3, 3, 1])
                 # print('state 2: ', state2)
                 print(sess.run(y, feed_dict={input_tensor:state2}))
 
