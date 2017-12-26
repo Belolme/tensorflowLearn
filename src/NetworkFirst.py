@@ -24,7 +24,7 @@ tf.summary.histogram("w3", w3)
 
 # 这是 backprogation 算法的定义
 # cross_entropy = tf.reduce_mean(tf.square(y_ - tf.clip_by_value(y, 0, 1.0)))
-cross_entropy = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
+cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
 # cross_entropy = -tf.reduce_mean(y_ * tf.log(tf.nn.softmax(y)))
 
 # use tensorboard visual cross_entropy
@@ -69,7 +69,7 @@ with tf.Session() as sess:
         _, summ_out, step = sess.run([train_step, summ, global_step], feed_dict={x: X[start: end], y_: Y[start: end]})
         writer.add_summary(summ_out, i)
 
-        if i % 10000 == 0:
+        if i % 1000 == 0:
             total_cross_entropy = sess.run(cross_entropy, feed_dict={x: X, y_: Y})
             print("After %d training step(s), cross entropy on all data is %g" % (
                 step, total_cross_entropy))

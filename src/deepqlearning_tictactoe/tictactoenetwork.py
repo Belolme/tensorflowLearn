@@ -6,7 +6,7 @@ from collections import deque
 import random
 import numpy as np
 import tensorflow as tf
-import game.TicTacToeGame as game
+import game
 
 ACTIONS = 9  # number of valid actions
 GAMMA = .99  # decay rate of past observations
@@ -36,20 +36,20 @@ class DeepQNetwork:
     def createNetworkWithCNN1(self, input_tensor):
         # network weights
         with tf.variable_scope('first_layout'):
-            W_conv1 = DeepQNetwork.__weightVariable([3, 3, 1, 32])
+            w_conv1 = DeepQNetwork.__weightVariable([3, 3, 1, 32])
             b_conv1 = DeepQNetwork.__biasVariable([32])
             h_conv1 = tf.nn.leaky_relu(DeepQNetwork.__conv2d(
-                input_tensor, W_conv1, 1) + b_conv1)
-            tf.summary.histogram("weights_1", W_conv1)
+                input_tensor, w_conv1, 1) + b_conv1)
+            tf.summary.histogram("weights_1", w_conv1)
             tf.summary.histogram("biases_1", b_conv1)
             tf.summary.histogram("activations_1", h_conv1)
 
         # with tf.variable_scope('second_layout'):
-        #     W_conv2 = DeepQNetwork.__weightVariable([3, 3, 32, 64])
+        #     w_conv2 = DeepQNetwork.__weightVariable([3, 3, 32, 64])
         #     b_conv2 = DeepQNetwork.__biasVariable([64])
         #     h_conv2 = tf.nn.leaky_relu(DeepQNetwork.__conv2d(
-        #         h_conv1, W_conv2, 1) + b_conv2)
-        #     tf.summary.histogram("weights_2", W_conv2)
+        #         h_conv1, w_conv2, 1) + b_conv2)
+        #     tf.summary.histogram("weights_2", w_conv2)
         #     tf.summary.histogram("biases_2", b_conv2)
         #     tf.summary.histogram("activations_2", h_conv2)
 
@@ -60,19 +60,19 @@ class DeepQNetwork:
         #     h_conv2, w_conv3, 1) + b_conv3)
 
         with tf.variable_scope('full_connect_layout'):
-            W_fc1 = DeepQNetwork.__weightVariable([32, 128])
+            w_fc1 = DeepQNetwork.__weightVariable([32, 128])
             b_fc1 = DeepQNetwork.__biasVariable([128])
             h_conv_flat = tf.reshape(h_conv1, [-1, 32])
-            h_fc1 = tf.nn.tanh(tf.matmul(h_conv_flat, W_fc1) + b_fc1)
-            tf.summary.histogram("weights_3", W_fc1)
+            h_fc1 = tf.nn.tanh(tf.matmul(h_conv_flat, w_fc1) + b_fc1)
+            tf.summary.histogram("weights_3", w_fc1)
             tf.summary.histogram("biases_3", b_fc1)
             tf.summary.histogram("activations_3", h_fc1)
 
         with tf.variable_scope('output_layout'):
-            W_fc2 = DeepQNetwork.__weightVariable([128, ACTIONS])
+            w_fc2 = DeepQNetwork.__weightVariable([128, ACTIONS])
             b_fc2 = DeepQNetwork.__biasVariable([ACTIONS])
-            y = tf.matmul(h_fc1, W_fc2) + b_fc2
-            tf.summary.histogram("weights_4", W_fc2)
+            y = tf.matmul(h_fc1, w_fc2) + b_fc2
+            tf.summary.histogram("weights_4", w_fc2)
             tf.summary.histogram("biases_4", b_fc2)
             tf.summary.histogram("activations_4", y)
 
@@ -163,9 +163,8 @@ class DeepQNetwork:
         return y
 
     def getCostFun(self, action, output_q, output_label):
-        # readout_action = tf.reduce_sum(tf.multiply(action, output_q), axis=1)
-        readout_action = output_q
-        cost = tf.reduce_mean(tf.square(output_label - readout_action))
+        readout_action = tf.reduce_sum(tf.multiply(action, output_q), axis=1)
+        cost = tf.reduce_mean(tf.square(readout_action - output_label))
         tf.summary.scalar('lost_value', cost)
         return cost
 
@@ -175,24 +174,55 @@ class DeepQNetwork:
 
         with tf.variable_scope('train'):
             global_step = tf.Variable(0, trainable=False)
-            learning_rate = tf.train.exponential_decay(
-                1e-2,
-                global_step,
-                5000, 0.96,
-                staircase=True)
-            tf.summary.scalar('learning_rate', learning_rate)
+            # learning_rate = tf.train.exponential_decay(
+            #     1e-2,
+            #     global_step,
+            #     5000, 0.96,
+            #     staircase=True)
+            # tf.summary.scalar('learning_rate', learning_rate)
 
-            # learning_rate = 1e-2
-            train_step = tf.train.GradientDescentOptimizer(
+            learning_rate = 1e-2
+            train_step = tf.train.AdamOptimizer(
                 learning_rate).minimize(cost, global_step=global_step)
-        
+
         return train_step, cost
+
+
+    def getOutputQLabel(self, batch, sess, y, input_tensor):
+        turn_to_batch = [d[1] for d in batch]
+        reward_batch = [d[3] for d in batch]
+        next_state_batch = [d[4].reshape([3, 3, 1]) for d in batch]
+
+        label_batch = []
+        for i in range(0, len(batch)):
+            terminal = batch[i][5]
+
+            if terminal != game.TerminalStatus.GOING:
+                label_batch.append(reward_batch[i])
+            else:
+                next_q_t = sess.run(y, feed_dict={input_tensor: [next_state_batch[i]]})[0]
+                if turn_to_batch[i] == game.IsTurnTo.BLACK:
+                    next_q_value = next_q_t[DeepQNetwork.getMinIndex(next_q_t,
+                                                next_state_batch[i].reshape([-1]),
+                                                game.IsTurnTo.BLANK.value)]
+                    next_q_value = -1 if next_q_value < -1 else next_q_value
+                else:
+                    next_q_value = next_q_t[DeepQNetwork.getMaxIndex(next_q_t,
+                                                next_state_batch[i].reshape([-1]),
+                                                game.IsTurnTo.BLANK.value)]
+                    next_q_value = 1 if next_q_value > 1 else next_q_value
+
+                # print(next_q_t)
+                # print(next_q_value)
+                label_batch.append(next_q_value)
+
+        return label_batch
 
     def train(self):
         # input layer
         with tf.variable_scope('input_tensor'):
             input_tensor = tf.placeholder("float", [None, 3, 3, 1])
-            output_label = tf.placeholder('float', [None, 9])
+            output_label = tf.placeholder('float', [None])
             action = tf.placeholder('float', [None, ACTIONS])
 
         output_q = self.createNetworkWithCNN1(input_tensor)
@@ -280,36 +310,6 @@ class DeepQNetwork:
                 print('new_m is ', new_m)
 
                 if len(D) > OBSERVE:
-                    def getOutputQLabel(batch):
-                        side_batch = [d[1] for d in batch]
-                        reward_batch = [d[3] for d in batch]
-                        next_state_batch = [d[4].reshape([3,3,1]) for d in batch]
-
-                        return_batch = []
-                        for i in range(0, len(batch)):
-                            terminal = batch[i][5]
-
-                            q_value = sess.run(output_q, feed_dict={input_tensor: [batch[i][0].reshape([3, 3, 1])]})[0]
-
-                            if terminal != game.TerminalStatus.GOING:
-                                q_value[np.argmax(batch[i][2])] = reward_batch[i]
-                                return_batch.append(q_value)
-                            else:
-                                if side_batch[i] == game.IsTurnTo.BLACK:
-                                    next_q_1 = sess.run(output_q, feed_dict={input_tensor: [next_state_batch[i]]})[0]
-                                    next_q_value = next_q_1[DeepQNetwork.getMinIndex(next_q_1,
-                                                                            next_state_batch[i].reshape([-1]),
-                                                                            game.IsTurnTo.BLANK.value)]
-                                else:
-                                    next_q_1 = sess.run(output_q, feed_dict={input_tensor: [next_state_batch[i]]})[0]
-                                    next_q_value = next_q_1[DeepQNetwork.getMaxIndex(next_q_1,
-                                                                            next_state_batch[i].reshape([-1]),
-                                                                            game.IsTurnTo.BLANK.value)]
-                                q_value[np.argmax(batch[i][2])] = reward_batch[i] + GAMMA * next_q_value
-                                return_batch.append(q_value)
-
-                        return return_batch
-
                     # sample a minibatch to train on
                     # minibatch = random.sample(D, int(BATCH / 2))
                     minibatch = []
@@ -317,7 +317,7 @@ class DeepQNetwork:
                         minibatch.append(D[-i])
 
                     while True:
-                        output_q_batch = getOutputQLabel(minibatch)
+                        output_q_batch = self.getOutputQLabel(minibatch, sess, output_q, input_tensor)
                         # print(output_q_b_batch)
 
                         _, loss_output, summ_output = sess.run([train_step, loss, summ], feed_dict={action: [d[2] for d in minibatch],
