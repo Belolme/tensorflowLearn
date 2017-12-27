@@ -21,7 +21,7 @@ def __conv2d(x, W, stride):
     return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding="SAME")
 
 
-def createNetwork(input_tensor):
+def createNetwork(input_tensor, regularizer=None):
     # network weights
     with tf.variable_scope('first_layout'):
         w_conv1 = __weightVariable([3, 3, 1, 32])
@@ -43,11 +43,16 @@ def createNetwork(input_tensor):
         b_fc1 = __biasVariable([128])
         h_conv_flat = tf.reshape(h_conv3, [-1, 32 * 18])
         h_fc1 = tf.nn.tanh(tf.matmul(h_conv_flat, w_fc1) + b_fc1)
+        if regularizer is not None:
+            tf.add_to_collection('regularizer', regularizer(w_fc1))
+        w_fc1 = tf.nn.dropout(w_fc1, 0.3)
 
     with tf.variable_scope('output_layout'):
         w_fc2 = __weightVariable([128, ACTIONS])
         b_fc2 = __biasVariable([ACTIONS])
         y = tf.matmul(h_fc1, w_fc2) + b_fc2
+        if regularizer is not None:
+            tf.add_to_collection('regularizer', regularizer(w_fc2))
 
     return y
 
@@ -68,10 +73,10 @@ def createNetwork2(input_tensor):
 
 def getCostFun(action, output_q, output_label):
     readout_action = tf.reduce_sum(tf.multiply(action, output_q), axis=1)
-    cost = tf.reduce_mean(tf.square(readout_action - output_label))
+    cost = tf.reduce_mean(tf.square(readout_action - output_label)) + tf.add_n(tf.get_collection('regularizer'))
     tf.summary.scalar('lost_value', cost)
     return cost
-    
+   
 
 def getTrainStepAndLossFun(action, output_q, output_label):
     with tf.variable_scope('loss_function'):
@@ -86,7 +91,7 @@ def getTrainStepAndLossFun(action, output_q, output_label):
         #     staircase=True)
         # tf.summary.scalar('learning_rate', learning_rate)
 
-        learning_rate = 1e-2
+        learning_rate = 1e-4
         train_step = tf.train.AdamOptimizer(
             learning_rate).minimize(cost, global_step=global_step)
 
@@ -156,24 +161,26 @@ def main():
         output_label = tf.placeholder('float', [None])
         action = tf.placeholder('float', [None, ACTIONS])
 
-        y = createNetwork(input_tensor)
+        regularizer = tf.contrib.layers.l2_regularizer(0.0001)
+        y = createNetwork(input_tensor, regularizer)
         train_step, loss = getTrainStepAndLossFun(action, y, output_label)
 
         sess.run(tf.initialize_all_variables())
 
         minibatch = [
-            # (np.array([[1, 2, 1],[1, 1, 2],[0, 2, 2]]), game.IsTurnTo.BLACK, np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.]), 10,
-            #     np.array([[1, 2, 1],[1, 1, 2],[2, 2, 2]]), game.TerminalStatus.BLACK_WIN, 6),
-            # (np.array([[1, 0, 1],[2, 0, 2],[0, 0, 2]]), game.IsTurnTo.WHITE, np.array([ 0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]), -10,
-            #     np.array([[1, 1, 1],[2, 0, 2],[0, 0, 2]]), game.TerminalStatus.WHITE_WIN, 1),
-            # (np.array([[2, 0, 0],[1, 1, 0],[2, 0, 0]]), game.IsTurnTo.BLACK, np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.]), 0,
-            #     np.array([[2, 0, 0],[1, 1, 0],[2, 2, 0]]), game.TerminalStatus.GOING, 7),
-            # (np.array([[2, 0, 0],[1, 1, 0],[2, 2, 0]]), game.IsTurnTo.WHITE, np.array([ 0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.]), -10,
-            #     np.array([[2, 0, 0],[1, 1, 1],[2, 2, 0]]), game.TerminalStatus.WHITE_WIN, 5),
-            # (np.array([[0, 2, 1],[2, 1, 0],[2, 0, 0]]), game.IsTurnTo.WHITE, np.array([ 0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.]), 0,
-            #     np.array([[0, 2, 1],[2, 1, 1],[2, 0, 0]]), game.TerminalStatus.GOING, 5),
-            # (np.array([[0, 2, 1],[2, 1, 1],[2, 0, 0]]), game.IsTurnTo.BLACK, np.array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]), 10,
-            #     np.array([[2, 2, 1],[2, 1, 1],[2, 0, 0]]), game.TerminalStatus.BLACK_WIN, 0),
+            (np.array([[1, 2, 1],[1, 1, 2],[0, 2, 2]]), game.IsTurnTo.BLACK, np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.]), 1,
+                np.array([[1, 2, 1],[1, 1, 2],[2, 2, 2]]), game.TerminalStatus.BLACK_WIN, 6),
+            (np.array([[1, 0, 1],[2, 0, 2],[0, 0, 2]]), game.IsTurnTo.WHITE, np.array([ 0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]), -1,
+                np.array([[1, 1, 1],[2, 0, 2],[0, 0, 2]]), game.TerminalStatus.WHITE_WIN, 1),
+            (np.array([[2, 0, 0],[1, 1, 0],[2, 0, 0]]), game.IsTurnTo.BLACK, np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.]), 0,
+                np.array([[2, 0, 0],[1, 1, 0],[2, 2, 0]]), game.TerminalStatus.GOING, 7),
+            (np.array([[2, 0, 0],[1, 1, 0],[2, 2, 0]]), game.IsTurnTo.WHITE, np.array([ 0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.]), -1,
+                np.array([[2, 0, 0],[1, 1, 1],[2, 2, 0]]), game.TerminalStatus.WHITE_WIN, 5),
+            (np.array([[0, 2, 1],[2, 1, 0],[2, 0, 0]]), game.IsTurnTo.WHITE, np.array([ 0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.]), 0,
+                np.array([[0, 2, 1],[2, 1, 1],[2, 0, 0]]), game.TerminalStatus.GOING, 5),
+            (np.array([[0, 2, 1],[2, 1, 1],[2, 0, 0]]), game.IsTurnTo.BLACK, np.array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]), 1,
+                np.array([[2, 2, 1],[2, 1, 1],[2, 0, 0]]), game.TerminalStatus.BLACK_WIN, 0),
+
 
             (np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]), 0, np.array([[0, 0, 0], [0, 2, 0], [0, 0, 0]]), game.TerminalStatus.GOING, 4), 
             (np.array([[0, 0, 0], [0, 2, 0], [0, 0, 0]]), game.IsTurnTo.WHITE, np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 0, np.array([[1, 0, 0], [0, 2, 0], [0, 0, 0]]), game.TerminalStatus.GOING, 0), 
@@ -181,8 +188,17 @@ def main():
             (np.array([[1, 0, 0], [0, 2, 0], [2, 0, 0]]), game.IsTurnTo.WHITE, np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 0, np.array([[1, 1, 0], [0, 2, 0], [2, 0, 0]]), game.TerminalStatus.GOING, 1),
             (np.array([[1, 1, 0], [0, 2, 0], [2, 0, 0]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]), 0, np.array([[1, 1, 0], [0, 2, 0], [2, 0, 2]]), game.TerminalStatus.GOING, 8), 
             (np.array([[1, 1, 0], [0, 2, 0], [2, 0, 2]]), game.IsTurnTo.WHITE, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]), 0, np.array([[1, 1, 0], [0, 2, 0], [2, 1, 2]]), game.TerminalStatus.GOING, 7), 
+
             (np.array([[1, 1, 0], [0, 2, 0], [2, 1, 2]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 1, np.array([[1, 1, 2], [0, 2, 0], [2, 1, 2]]), game.TerminalStatus.BLACK_WIN, 2),
 
+            (np.array([[1, 1, 0], [0, 2, 0], [2, 1, 2]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),0, np.array([[1, 1, 0], [2, 2, 0], [2, 1, 2]]), game.TerminalStatus.GOING,3),
+            (np.array([[1, 1, 0], [2, 2, 0], [2, 1, 2]]), game.IsTurnTo.WHITE, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),-1, np.array([[1, 1, 1], [2, 2, 0], [2, 1, 2]]), game.TerminalStatus.WHITE_WIN,2),
+
+            (np.array([[1, 1, 0], [2, 2, 0], [2, 1, 2]]), game.IsTurnTo.WHITE, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),0, np.array([[1, 1, 0], [2, 2, 1], [2, 1, 2]]), game.TerminalStatus.GOING,5),
+            (np.array([[1, 1, 0], [2, 2, 1], [2, 1, 2]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),1, np.array([[1, 1, 2], [2, 2, 1], [2, 1, 2]]), game.TerminalStatus.BLACK_WIN,2),
+
+            (np.array([[1, 1, 0], [0, 2, 0], [2, 1, 2]]), game.IsTurnTo.BLACK, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),0, np.array([[1, 1, 0], [0, 2, 2], [2, 1, 2]]), game.TerminalStatus.GOING,5),
+            (np.array([[1, 1, 0], [0, 2, 2], [2, 1, 2]]), game.IsTurnTo.WHITE, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),-1, np.array([[1, 1, 1], [0, 2, 2], [2, 1, 2]]), game.TerminalStatus.WHITE_WIN,2),
 
             (np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]]), game.IsTurnTo.BLACK, np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),0, np.array([[2, 0, 0], [0, 0, 0], [0, 0, 0]]), game.TerminalStatus.GOING,0), 
             (np.array([[2, 0, 0], [0, 0, 0], [0, 0, 0]]), game.IsTurnTo.WHITE, np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),0, np.array([[2, 1, 0], [0, 0, 0], [0, 0, 0]]), game.TerminalStatus.GOING,1), 
@@ -196,7 +212,7 @@ def main():
 
       
         times = 0
-        for _ in range(0, 100000):
+        for _ in range(0, 10000):
             output_q_batch = getOutputQLabel(minibatch, sess, y, input_tensor)
             # print(output_q_batch)
             _, loss_result = sess.run([train_step,loss],  feed_dict={action: [d[2] for d in minibatch],
@@ -211,7 +227,7 @@ def main():
                 # print('state1', state1)
                 print(sess.run(y, feed_dict={input_tensor: state1}))
 
-                state2 = minibatch[6][0].reshape([1, 3, 3, 1])
+                state2 = minibatch[5][0].reshape([1, 3, 3, 1])
                 # print('state 2: ', state2)
                 print(sess.run(y, feed_dict={input_tensor:state2}))
 

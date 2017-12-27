@@ -5,7 +5,7 @@ from math import sqrt
 from math import log as ln
 from math import inf as infinity
 
-PLAYOUT_TIMES = 100
+PLAYOUT_TIMES = 10
 
 
 class UCB:
@@ -103,8 +103,8 @@ def simDefault(board):
     return weight
 
 
-def mcts(treeNode, gamebaord):
-    while treeNode.visits < PLAYOUT_TIMES:
+def mcts(treeNode, gamebaord, playout_times = PLAYOUT_TIMES):
+    while treeNode.visits < playout_times:
         selected_node, game_tmp = selectionAndExpansion(treeNode, gamebaord)
         z = simDefault(game_tmp)
         backpropagation(selected_node, treeNode, z)

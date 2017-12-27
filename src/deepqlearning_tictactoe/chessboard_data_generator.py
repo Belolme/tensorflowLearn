@@ -24,19 +24,28 @@ if __name__ == '__main__':
     board = TicTacToe()
     output = ''
 
-    while board.terminal == TerminalStatus.GOING:
-        output = output + ', ' + '(' + strOfNpArray(board.state) + ', '  \
+    action = [
+        (1, 1), (0, 0),
+        (2, 0), (0, 1),
+        (2, 2), (2, 1),
+
+        (1, 2), (0, 2)
+    ]
+
+    for a in action:
+        output = output  + '(' + strOfNpArray(board.state) + ', '  \
             + 'game.' + str(board.is_turn) + ', '
 
-        my_choice = [int(c) for c in input('input your choose\n').split(' ')]
-        board.setAction(tuple(my_choice))
+        # my_choice = [int(c) for c in input('input your choose\n').split(' ')]
+        # board.setAction(tuple(my_choice))
+        board.setAction(a)
 
         _, reward, _ = board.getState()
 
-        output = output + strListChoice(my_choice) + ',' \
+        output = output + strListChoice(a) + ',' \
             + str(reward) + ', ' \
             + strOfNpArray(board.state) + ', ' \
             + 'game.' + str(board.terminal) + ',' \
-            + strNumChoice(my_choice) + ')'
+            + strNumChoice(a) + '),\n'
 
     print(output)
