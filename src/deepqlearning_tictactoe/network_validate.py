@@ -7,12 +7,12 @@ import mcts
 import network
 import utils
 
-VALIDATE_TIMES = 10
-MCTS_SIMULATION_TIMES = 2
+VALIDATE_TIMES = 100
+MCTS_SIMULATION_TIMES = 100
 
 
 def validate(sess=None):
-    input_tensor = tf.placeholder("float", [None, 3, 3, 1])
+    input_tensor = tf.placeholder("float", [None, 3, 3, 2])
     output_label = tf.placeholder('float', [None])
     action = tf.placeholder('float', [None, CHESSBOARD_SIZE ** 2])
 
@@ -43,7 +43,7 @@ def validate(sess=None):
         print('############## %d times ####################' % i)
 
         while my_game.terminal == TerminalStatus.GOING:
-            mcts.mcts(tree, my_game, MCTS_SIMULATION_TIMES)
+            mcts.mcts(tree, my_game, playout_times=MCTS_SIMULATION_TIMES)
             tree = mcts.getAIMoveNode(tree, my_game)
             my_game.setAction(tree.action)
 
@@ -53,7 +53,7 @@ def validate(sess=None):
                 break
 
             q_value = sess.run(q_network, feed_dict={
-                input_tensor: my_game.state.copy().reshape([1, 3, 3, 1])
+                input_tensor: [utils.boardPreprocess(my_game.state)]
             })[0]
 
             if my_game.is_turn == IsTurnTo.BLACK:
@@ -74,6 +74,7 @@ def validate(sess=None):
 
             # print(str(my_game))
 
+        print(my_game.terminal)
         if my_game.terminal == TerminalStatus.BLACK_WIN:
             mcts_win += 1
         elif my_game.terminal == TerminalStatus.WHITE_WIN:

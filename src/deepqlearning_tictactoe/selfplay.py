@@ -2,6 +2,7 @@ from game import *
 import mcts
 import tensorflow as tf
 import network
+import utils
 
 
 def main():
@@ -9,7 +10,7 @@ def main():
     o_win = 0
     draw = 0
 
-    input_tensor = tf.placeholder("float", [None, 3, 3, 1])
+    input_tensor = tf.placeholder("float", [None, 3, 3, 2])
     output_label = tf.placeholder('float', [None])
     action = tf.placeholder('float', [None, CHESSBOARD_SIZE ** 2])
     q_network = network.createNetworkWithCNN1(input_tensor, True)
@@ -28,8 +29,8 @@ def main():
     def heuristic(s, a):
         return sess.run(q_network,
                         feed_dict={
-                            input_tensor: s.copy().reshape([1, 3, 3, 1])
-                        })[0][a[0] * CHESSBOARD_SIZE + a[1]], 60
+                            input_tensor: [utils.boardPreprocess(s)]
+                        })[0][a[0] * CHESSBOARD_SIZE + a[1]], 50
 
     for _ in range(100):
         x_tree = mcts.Node()
