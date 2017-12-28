@@ -25,7 +25,7 @@ def validate(sess=None):
         sess = tf.Session()
 
     saver = tf.train.Saver()
-    checkpoint = tf.train.get_checkpoint_state("saved_networks")
+    checkpoint = tf.train.get_checkpoint_state("saved_networks/")
     if checkpoint and checkpoint.model_checkpoint_path:
         saver.restore(sess, checkpoint.model_checkpoint_path)
         print("Successfully loaded:", checkpoint.model_checkpoint_path)

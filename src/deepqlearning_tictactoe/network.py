@@ -4,7 +4,7 @@ import tensorflow as tf
 ACTIONS = 9
 REGULARIZER_RATE = 0.0001
 LEARNING_RATE = 1e-4
-DRAOPOUT_KEEP_PROB = 0.3
+DRAOPOUT_KEEP_PROB = 0.5
 
 
 def __weightVariable(shape):
@@ -25,7 +25,7 @@ def __conv2d(x, W, stride):
 def __createNetworkWithCNN1(input_tensor, regularizer=None, train=False):
     # network weights
     with tf.variable_scope('first_layout'):
-        w_conv1 = __weightVariable([3, 3, 1, 32])
+        w_conv1 = __weightVariable([3, 3, 2, 32])
         b_conv1 = __biasVariable([32])
         h_conv1 = tf.nn.leaky_relu(__conv2d(
             input_tensor, w_conv1, 1) + b_conv1)

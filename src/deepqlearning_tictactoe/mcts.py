@@ -1,51 +1,11 @@
 import copy
 import random
+from utils import UCB, Node
 from game import *
-from math import sqrt
-from math import log as ln
-from math import inf as infinity
 
-PLAYOUT_TIMES = 10
-
-
-class UCB:
-    """
-    selection algorithm
-    """
-
-    def __init__(self):
-        self.ex = sqrt(2)
-
-    def __call__(self, weight, count, parent_count):
-        if count == 0:
-            return 1
-        return weight + self.ex * sqrt(ln(parent_count) / count)
-
+PLAYOUT_TIMES = 100
 
 ucb = UCB()
-
-
-class Node:
-    def __init__(self, action=None, parent=None):
-        self.weight = random.random() / 20
-        self.visits = 0
-        self.parent = parent
-        self.children = []
-        self.action = action
-
-    def lenOfChildren(self):
-        return len(self.children)
-
-    def __str__(self, level=0):
-        ret = "|{}{}{}/{}\n".format("---|" * level, str(self.action),
-                                    str(self.weight), str(self.visits))
-        for child in self.children:
-            ret += child.__str__(level + 1)
-        return ret
-
-    def insert(self, node):
-        node.parent = self
-        self.children.append(node)
 
 
 def selectUBCMoveNode(treeNode, gameboard):
@@ -61,14 +21,21 @@ def selectUBCMoveNode(treeNode, gameboard):
         return None
 
 
-def selectionAndExpansion(treeNode, gameboard):
+def selectionAndExpansion(treeNode, gameboard, heuristic_fun=None):
     game_tmp = copy.deepcopy(gameboard)
     ptr = treeNode
     while game_tmp.terminal == TerminalStatus.GOING:
         if len(ptr.children) == 0:
             validation_actions = game_tmp.getValidationAction()
             for action in validation_actions:
-                ptr.insert(Node(action, ptr))
+                insert_child = Node(action, ptr)
+
+                if heuristic_fun is not None:
+                    weight, visits = heuristic_fun(game_tmp.state, action)
+                    insert_child.weight = weight
+                    insert_child.visits = visits
+
+                ptr.insert(insert_child)
 
             selected_action_index = random.randint(
                 0, len(validation_actions) - 1)
@@ -103,9 +70,9 @@ def simDefault(board):
     return weight
 
 
-def mcts(treeNode, gamebaord, playout_times = PLAYOUT_TIMES):
+def mcts(treeNode, gamebaord, heuristic_fun=None, playout_times=PLAYOUT_TIMES):
     while treeNode.visits < playout_times:
-        selected_node, game_tmp = selectionAndExpansion(treeNode, gamebaord)
+        selected_node, game_tmp = selectionAndExpansion(treeNode, gamebaord, heuristic_fun)
         z = simDefault(game_tmp)
         backpropagation(selected_node, treeNode, z)
 

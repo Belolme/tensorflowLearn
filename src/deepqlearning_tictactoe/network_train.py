@@ -9,14 +9,15 @@ import tensorflow as tf
 import game
 import network
 import utils
+import mcts
 
 ACTIONS = 9  # number of valid actions
 GAMMA = .99  # decay rate of past observations
 OBSERVE = 1024.  # timesteps to observe before training
-EXPLORE = 2000.  # frames over which to anneal epsilon
+EXPLORE = 3000.  # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001  # final value of epsilon
-INITIAL_EPSILON = 0.5  # starting value of epsilon
-REPLAY_MEMORY = 3000  # number of previous transitions to remember
+INITIAL_EPSILON = 0.9  # starting value of epsilon
+REPLAY_MEMORY = 8000  # number of previous transitions to remember
 BATCH = 32  # size of minibatch
 TRAIN_STEP = 10
 
@@ -25,7 +26,7 @@ class DeepQNetwork:
     def getOutputQLabel(self, batch, sess, y, input_tensor):
         turn_to_batch = [d[1] for d in batch]
         reward_batch = [d[3] for d in batch]
-        next_state_batch = [d[4].reshape([3, 3, 1]) for d in batch]
+        next_state_batch = [d[4] for d in batch]
 
         label_batch = []
         for i in range(0, len(batch)):
@@ -34,17 +35,17 @@ class DeepQNetwork:
             if terminal != game.TerminalStatus.GOING:
                 label_batch.append(reward_batch[i])
             else:
-                next_q_t = sess.run(y, feed_dict={input_tensor: [next_state_batch[i]]})[0]
+                next_q_t = sess.run(y, feed_dict={input_tensor: [utils.boardPreprocess(next_state_batch[i])]})[0]
                 if turn_to_batch[i] == game.IsTurnTo.BLACK:
                     next_q_value = next_q_t[utils.getMinIndex(next_q_t,
-                                                next_state_batch[i].reshape([-1]),
+                                                next_state_batch[i].copy().reshape([-1]),
                                                 game.IsTurnTo.BLANK.value)]
-                    next_q_value = -1 if next_q_value < -1 else next_q_value
+                    # next_q_value = -1 if next_q_value < -1 else next_q_value
                 else:
                     next_q_value = next_q_t[utils.getMaxIndex(next_q_t,
-                                                next_state_batch[i].reshape([-1]),
+                                                next_state_batch[i].copy().reshape([-1]),
                                                 game.IsTurnTo.BLANK.value)]
-                    next_q_value = 1 if next_q_value > 1 else next_q_value
+                    # next_q_value = 1 if next_q_value > 1 else next_q_value
 
                 # print(next_q_t)
                 # print(next_q_value)
@@ -55,7 +56,7 @@ class DeepQNetwork:
     def train(self):
         # input layer
         with tf.variable_scope('input_tensor'):
-            input_tensor = tf.placeholder("float", [None, 3, 3, 1])
+            input_tensor = tf.placeholder("float", [None, 3, 3, 2])
             output_label = tf.placeholder('float', [None])
             action = tf.placeholder('float', [None, ACTIONS])
 
@@ -95,19 +96,23 @@ class DeepQNetwork:
 
                 # get current q value
                 next_q = sess.run(output_q,
-                                feed_dict={input_tensor: [state.reshape([3, 3, 1])]})[0]
+                                feed_dict={input_tensor: [utils.boardPreprocess(state)]})[0]
 
                 # get action index
                 action_index = -1
                 action_tensor = np.zeros([ACTIONS])
                 if random.random() < epsilon:
                     print('-------random action----------')
-                    random_set = []
-                    for i, v in enumerate(state.reshape([-1])):
-                        if v == game.IsTurnTo.BLANK.value:
-                            random_set.append(i)
+                    # random_set = []
+                    # for i, v in enumerate(state.reshape([-1])):
+                    #     if v == game.IsTurnTo.BLANK.value:
+                    #         random_set.append(i)
 
-                    action_index = random.sample(random_set, 1)[0]
+                    # action_index = random.sample(random_set, 1)[0]
+                    tree = mcts.Node()
+                    mcts.mcts(tree, my_game, playout_times=100)
+                    mcts_action = mcts.getAIMoveNode(tree, my_game).action
+                    action_index = mcts_action[0] * 3 + mcts_action[1]
                 else:
                     print('------------q value action--------------')
                     if game.IsTurnTo.BLACK == is_turn_to:
@@ -149,7 +154,7 @@ class DeepQNetwork:
                     output_q_batch = self.getOutputQLabel(minibatch, sess, output_q, input_tensor)
                     # print(output_q_b_batch)
                     _, loss_output, summ_output = sess.run([train_step, loss, summ], feed_dict={action: [d[2] for d in minibatch],
-                                                        input_tensor: [d[0].reshape([3, 3, 1]) for d in minibatch],
+                                                        input_tensor: [utils.boardPreprocess(d[0]) for d in minibatch],
                                                         output_label: output_q_batch})
                     
                     writer.add_summary(summ_output, times)

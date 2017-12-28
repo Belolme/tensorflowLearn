@@ -24,7 +24,7 @@ def __conv2d(x, W, stride):
 def createNetwork(input_tensor, regularizer=None):
     # network weights
     with tf.variable_scope('first_layout'):
-        w_conv1 = __weightVariable([3, 3, 1, 32])
+        w_conv1 = __weightVariable([3, 3, 2, 32])
         b_conv1 = __biasVariable([32])
         h_conv1 = tf.nn.relu(__conv2d(input_tensor, w_conv1, 1) + b_conv1)
 
@@ -45,7 +45,7 @@ def createNetwork(input_tensor, regularizer=None):
         h_fc1 = tf.nn.tanh(tf.matmul(h_conv_flat, w_fc1) + b_fc1)
         if regularizer is not None:
             tf.add_to_collection('regularizer', regularizer(w_fc1))
-        w_fc1 = tf.nn.dropout(w_fc1, 0.3)
+        w_fc1 = tf.nn.dropout(w_fc1, 0.5)
 
     with tf.variable_scope('output_layout'):
         w_fc2 = __weightVariable([128, ACTIONS])
@@ -126,7 +126,7 @@ def getMinIndex(input_t, validate_t, validate_v):
 def getOutputQLabel(batch, sess, y, input_tensor):
     turn_to_batch = [d[1] for d in batch]
     reward_batch = [d[3] for d in batch]
-    next_state_batch = [d[4].reshape([3, 3, 1]) for d in batch]
+    next_state_batch = [d[4] for d in batch]
 
     label_batch = []
     for i in range(0, len(batch)):
@@ -135,15 +135,15 @@ def getOutputQLabel(batch, sess, y, input_tensor):
         if terminal != game.TerminalStatus.GOING:
             label_batch.append(reward_batch[i])
         else:
-            next_q_t = sess.run(y, feed_dict={input_tensor: [next_state_batch[i]]})[0]
+            next_q_t = sess.run(y, feed_dict={input_tensor: [boardPreprocess(next_state_batch[i])]})[0]
             if turn_to_batch[i] == game.IsTurnTo.BLACK:
                 next_q_value = next_q_t[getMinIndex(next_q_t,
-                                            next_state_batch[i].reshape([-1]),
+                                            next_state_batch[i].copy().reshape([-1]),
                                             game.IsTurnTo.BLANK.value)]
                 next_q_value = -1 if next_q_value < -1 else next_q_value
             else:
                 next_q_value = next_q_t[getMaxIndex(next_q_t,
-                                            next_state_batch[i].reshape([-1]),
+                                            next_state_batch[i].copy().reshape([-1]),
                                             game.IsTurnTo.BLANK.value)]
                 next_q_value = 1 if next_q_value > 1 else next_q_value
 
@@ -154,10 +154,22 @@ def getOutputQLabel(batch, sess, y, input_tensor):
     return label_batch
 
 
+def boardPreprocess(board):
+    result = np.zeros([game.CHESSBOARD_SIZE, game.CHESSBOARD_SIZE, 2])
+
+    for i in range(0, game.CHESSBOARD_SIZE):
+        for j in range(0, game.CHESSBOARD_SIZE):
+            if board[i][j] == game.IsTurnTo.BLACK.value:
+                result[i][j][0] = 1
+            elif board[i][j] == game.IsTurnTo.WHITE.value:
+                result[i][j][1] = 1
+    
+    return result
+
 def main():
     with tf.Session() as sess:
         # input_tensor = tf.placeholder("float", [None, 9])
-        input_tensor = tf.placeholder("float", [None, 3, 3, 1])
+        input_tensor = tf.placeholder("float", [None, 3, 3, 2])
         output_label = tf.placeholder('float', [None])
         action = tf.placeholder('float', [None, ACTIONS])
 
@@ -216,20 +228,20 @@ def main():
             output_q_batch = getOutputQLabel(minibatch, sess, y, input_tensor)
             # print(output_q_batch)
             _, loss_result = sess.run([train_step,loss],  feed_dict={action: [d[2] for d in minibatch],
-                                    input_tensor: [d[0].reshape([3, 3, 1]) for d in minibatch],
+                                    input_tensor: [boardPreprocess(d[0]) for d in minibatch],
                                     output_label: output_q_batch})
             
             times += 1
             print('lose result:', loss_result, 'times: ', times)
 
             if times % 100 == 0:
-                state1 = minibatch[0][0].reshape([1, 3, 3, 1])
+                state1 = boardPreprocess(minibatch[0][0])
                 # print('state1', state1)
-                print(sess.run(y, feed_dict={input_tensor: state1}))
+                print(sess.run(y, feed_dict={input_tensor: [state1]}))
 
-                state2 = minibatch[5][0].reshape([1, 3, 3, 1])
+                state2 = boardPreprocess(minibatch[5][0])
                 # print('state 2: ', state2)
-                print(sess.run(y, feed_dict={input_tensor:state2}))
+                print(sess.run(y, feed_dict={input_tensor: [state2]}))
 
 if __name__ == '__main__':
     main()

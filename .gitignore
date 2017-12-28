@@ -4,3 +4,4 @@ MNIST_model/
 .idea/
 */tmp/
 *log/
+*.zip
