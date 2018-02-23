@@ -11,8 +11,8 @@ WHITE_NETWORK_PATH = 'saved_networks'
 def heuristic(q_network, input_tensor, sess, g, s, a, n=60):
     with sess.as_default():
         with g.as_default():
-            print(sess.graph)
-            print('default', tf.get_default_graph())
+            # print(sess.graph)
+            # print('default', tf.get_default_graph())
             return sess.run(q_network,
                     feed_dict={
                         input_tensor: [utils.boardPreprocess(s)]
@@ -72,7 +72,7 @@ def main():
             with sess_black.as_default():
                 with black_graph.as_default():
                     # print('black', sess_black.graph)
-                    mcts.mcts(x_tree, my_game, heuristic_fun=black_heuristic, playout_times=100)
+                    mcts.mcts(x_tree, my_game, heuristic_fun=None, playout_times=100)
             x_tree = mcts.getAIMoveNode(x_tree, my_game)
             my_game.setAction(x_tree.action)
             # print(my_game)

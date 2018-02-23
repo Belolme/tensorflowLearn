@@ -1,6 +1,0 @@
-model_checkpoint_path: "tictactoe-dqn-110000"
-all_model_checkpoint_paths: "tictactoe-dqn-70000"
-all_model_checkpoint_paths: "tictactoe-dqn-80000"
-all_model_checkpoint_paths: "tictactoe-dqn-90000"
-all_model_checkpoint_paths: "tictactoe-dqn-100000"
-all_model_checkpoint_paths: "tictactoe-dqn-110000"

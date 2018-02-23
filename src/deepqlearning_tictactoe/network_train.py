@@ -20,7 +20,7 @@ INITIAL_EPSILON = 1  # starting value of epsilon
 REPLAY_MEMORY = 8000  # number of previous transitions to remember
 BATCH = 32  # size of minibatch
 TRAIN_STEP = 10
-NETWORK_PATH = 'saved_networks_black'
+NETWORK_PATH = 'saved_networks'
 
 
 class DeepQNetwork:
@@ -142,7 +142,7 @@ class DeepQNetwork:
                 action_index = -1
                 action_tensor = np.zeros([ACTIONS])
                 # if random.random() < epsilon:
-                if is_turn_to == game.IsTurnTo.WHITE or random.random() < epsilon:
+                if random.random() < epsilon:
                     print('-------random action----------')
                     # random_set = []
                     # for i, v in enumerate(state.reshape([-1])):
